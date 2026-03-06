@@ -432,17 +432,31 @@ function App() {
 			return
 		}
 
-		const { error } = await supabase
-			.from('memoryId')
-			.delete()
-			.eq('memoryId', target.memoryId)
+		let deleteError = ''
+		const numericId = Number(target.memoryId)
 
-		if (error) {
-			setDbNotice(`Delete memory failed: ${error.message}`)
-			return
+		const primaryDelete = Number.isNaN(numericId)
+			? await supabase.from('memoryId').delete().eq('memoryId', target.memoryId)
+			: await supabase.from('memoryId').delete().eq('memoryId', numericId)
+
+		if (primaryDelete.error) {
+			deleteError = primaryDelete.error.message
+			const fallbackDelete = await supabase
+				.from('memoryId')
+				.delete()
+				.eq('memoryName', target.caption)
+				.eq('memoryPhotosUrl', target.src)
+
+			if (fallbackDelete.error) {
+				setDbNotice(
+					`Delete memory failed: ${deleteError} | fallback: ${fallbackDelete.error.message}`,
+				)
+				return
+			}
 		}
 
 		setMemories((prev) => prev.filter((photo) => photo.id !== id))
+		setDbNotice('Memory deleted from Supabase.')
 
 		if (editingMemoryId === id) {
 			cancelEditMemory()
