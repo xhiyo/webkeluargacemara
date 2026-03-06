@@ -3,6 +3,9 @@ import type { ChangeEvent, FormEvent } from 'react'
 import './App.css'
 import { supabase } from './components/supaBaseClient.ts'
 import Footer from './footer'
+import coverCemara from './components/foto-cover-cemara.jpeg'
+import cemaraOne from './components/cemara-1.jpeg'
+import cemaraTwo from './components/cemara-2.jpeg'
 
 type ScheduleItem = {
 	id: string
@@ -42,6 +45,19 @@ type MemoryRow = {
 	memoryId: string
 	memoryName: string
 	memoryPhotosUrl: string
+}
+
+type TitleRow = {
+	titleId: string | number
+	titleName: string | null
+	titlePhotoUrl: string | null
+}
+
+type HeroPhoto = {
+	titleId: string
+	src: string
+	alt: string
+	caption: string
 }
 
 const mapMemoryRowToPhoto = (row: MemoryRow, index: number): MemoryPhoto => {
@@ -147,6 +163,29 @@ function App() {
 	const [isLoadingMemories, setIsLoadingMemories] = useState(true)
 	const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null)
 	const [editingCaption, setEditingCaption] = useState('')
+	const [heroPhotos, setHeroPhotos] = useState<HeroPhoto[]>([
+		{
+			titleId: 'local-1',
+			src: coverCemara,
+			alt: 'Keluarga Cemara circle cover',
+			caption: 'Foto Cover Keluarga Cemara',
+		},
+		{
+			titleId: 'local-2',
+			src: cemaraOne,
+			alt: 'Keluarga Cemara photo 1',
+			caption: 'Cemara 1',
+		},
+		{
+			titleId: 'local-3',
+			src: cemaraTwo,
+			alt: 'Keluarga Cemara photo 2',
+			caption: 'Cemara 2',
+		},
+	])
+	const [editingHeroPhotoId, setEditingHeroPhotoId] = useState<string | null>(null)
+	const [heroTitleDraft, setHeroTitleDraft] = useState('')
+	const [activeHeroPhoto, setActiveHeroPhoto] = useState<HeroPhoto | null>(null)
 	const [dbNotice, setDbNotice] = useState('')
 	const todayLabel = new Date().toLocaleDateString(undefined, {
 		weekday: 'long',
@@ -158,6 +197,79 @@ function App() {
 		() => schedules.filter((item) => !item.done).length,
 		[schedules],
 	)
+
+	const saveHeroPhotoTitle = async () => {
+		if (!editingHeroPhotoId) {
+			return
+		}
+
+		const nextTitle = heroTitleDraft.trim()
+
+		if (!nextTitle) {
+			return
+		}
+
+		const targetPhoto = heroPhotos.find((photo) => photo.titleId === editingHeroPhotoId)
+
+		if (!targetPhoto) {
+			return
+		}
+
+		const numericId = Number(editingHeroPhotoId)
+		const updateResult = Number.isNaN(numericId)
+			? await supabase
+					.from('title')
+					.update({ titleName: nextTitle })
+					.eq('titleId', editingHeroPhotoId)
+			: await supabase
+					.from('title')
+					.update({ titleName: nextTitle })
+					.eq('titleId', numericId)
+
+		if (updateResult.error) {
+			setDbNotice(`Update title failed: ${updateResult.error.message}`)
+			return
+		}
+
+		setHeroPhotos((prev) =>
+			prev.map((photo) =>
+				photo.titleId === editingHeroPhotoId
+					? {
+							...photo,
+							caption: nextTitle,
+						}
+					: photo,
+			),
+		)
+		setEditingHeroPhotoId(null)
+		setHeroTitleDraft('')
+		setDbNotice('Cover title updated in database.')
+
+		setActiveHeroPhoto((prev) => {
+			if (!prev) {
+				return prev
+			}
+
+			if (prev.titleId !== targetPhoto.titleId) {
+				return prev
+			}
+
+			return {
+				...prev,
+				caption: nextTitle,
+			}
+		})
+	}
+
+	const cancelHeroPhotoTitleEdit = () => {
+		setEditingHeroPhotoId(null)
+		setHeroTitleDraft('')
+	}
+
+	const startHeroPhotoTitleEdit = (photo: HeroPhoto) => {
+		setEditingHeroPhotoId(photo.titleId)
+		setHeroTitleDraft(photo.caption)
+	}
 
 	useEffect(() => {
 		const loadSchedules = async () => {
@@ -217,8 +329,67 @@ function App() {
 			setIsLoadingMemories(false)
 		}
 
+		const loadHeroTitles = async () => {
+			const { data, error } = await supabase
+				.from('title')
+				.select('titleId, titleName, titlePhotoUrl')
+				.order('titleId', { ascending: true })
+
+			if (error) {
+				setDbNotice((prev) =>
+					prev ? `${prev} | Title load failed: ${error.message}` : `Title load failed: ${error.message}`,
+				)
+				return
+			}
+
+			const rows = (data ?? []) as TitleRow[]
+
+			if (rows.length === 0) {
+				const seedRows = [
+					{ titleName: 'Foto Cover Keluarga Cemara', titlePhotoUrl: coverCemara },
+					{ titleName: 'Cemara 1', titlePhotoUrl: cemaraOne },
+					{ titleName: 'Cemara 2', titlePhotoUrl: cemaraTwo },
+				]
+
+				const seedResult = await supabase
+					.from('title')
+					.insert(seedRows)
+					.select('titleId, titleName, titlePhotoUrl')
+
+				if (seedResult.error) {
+					setDbNotice((prev) =>
+						prev
+							? `${prev} | Title seed failed: ${seedResult.error?.message ?? ''}`
+							: `Title seed failed: ${seedResult.error?.message ?? ''}`,
+					)
+					return
+				}
+
+				const seeded = (seedResult.data ?? []) as TitleRow[]
+				setHeroPhotos(
+					seeded.map((row, index) => ({
+						titleId: String(row.titleId ?? `title-${index}`),
+						src: String(row.titlePhotoUrl ?? ''),
+						alt: `Keluarga Cemara photo ${index + 1}`,
+						caption: String(row.titleName ?? `Cemara ${index + 1}`),
+					})),
+				)
+				return
+			}
+
+			setHeroPhotos(
+				rows.map((row, index) => ({
+					titleId: String(row.titleId ?? `title-${index}`),
+					src: String(row.titlePhotoUrl ?? ''),
+					alt: `Keluarga Cemara photo ${index + 1}`,
+					caption: String(row.titleName ?? `Cemara ${index + 1}`),
+				})),
+			)
+		}
+
 		void loadSchedules()
 		void loadMemories()
+		void loadHeroTitles()
 	}, [])
 
 	useEffect(() => {
@@ -514,12 +685,61 @@ function App() {
 	return (
 		<main className="circle-app">
 			<section className="hero">
-				<p className="hero-tag">friend circle hub</p>
-				<h1>Plan your day, keep your memories close.</h1>
+				<p className="hero-tag">keluarga cemara circle</p>
+				<h1>Keluarga Cemara: our circle of warmth, growth, and memories.</h1>
 				<p className="hero-copy">
-					A cozy green space for your crew: arrange schedules, celebrate moments,
-					and upload new photo memories from your device.
+					This cover represents our friendship like a cedar tree: rooted in trust,
+					standing through every season, and growing stronger together.
 				</p>
+				<p className="hero-intro">
+					Here we plan our days, keep our promises, and store the moments that make
+					our circle feel like home.
+				</p>
+				<div className="hero-photo-gallery" aria-label="Keluarga Cemara photos">
+					{heroPhotos.map((photo) => (
+						<figure key={photo.src} className="hero-photo-showcase">
+							<button
+								type="button"
+								className="hero-photo-trigger"
+								onClick={() => setActiveHeroPhoto(photo)}
+							>
+								<img src={photo.src} alt={photo.alt} />
+							</button>
+							<figcaption className="hero-photo-caption">
+								{editingHeroPhotoId === photo.titleId ? (
+									<div className="cover-title-edit">
+										<input
+											type="text"
+											value={heroTitleDraft}
+											onChange={(event) => setHeroTitleDraft(event.target.value)}
+										/>
+										<button type="button" onClick={saveHeroPhotoTitle}>
+											Save
+										</button>
+										<button
+											type="button"
+											className="secondary"
+											onClick={cancelHeroPhotoTitleEdit}
+										>
+											Cancel
+										</button>
+									</div>
+								) : (
+									<>
+										<span>{photo.caption}</span>
+										<button
+											type="button"
+											className="cover-title-btn"
+											onClick={() => startHeroPhotoTitleEdit(photo)}
+										>
+											Edit title
+										</button>
+									</>
+								)}
+							</figcaption>
+						</figure>
+					))}
+				</div>
 				<div className="hero-row">
 					<span className="hero-date">Today: {todayLabel}</span>
 					<span className="hero-people">6 friends connected</span>
@@ -736,6 +956,27 @@ function App() {
 				</div>
 			</section>
 			<Footer />
+
+			{activeHeroPhoto ? (
+				<div
+					className="hero-lightbox"
+					onClick={() => setActiveHeroPhoto(null)}
+					role="dialog"
+					aria-modal="true"
+				>
+					<div className="hero-lightbox-card" onClick={(event) => event.stopPropagation()}>
+						<button
+							type="button"
+							className="hero-lightbox-close"
+							onClick={() => setActiveHeroPhoto(null)}
+						>
+							Close
+						</button>
+						<img src={activeHeroPhoto.src} alt={activeHeroPhoto.alt} />
+						<p>{activeHeroPhoto.caption}</p>
+					</div>
+				</div>
+			) : null}
 		</main>
 	)
 }

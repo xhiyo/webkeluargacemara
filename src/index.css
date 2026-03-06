@@ -31,9 +31,10 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background:
+    linear-gradient(180deg, rgba(237, 248, 232, 0.88), rgba(212, 236, 205, 0.8)),
     radial-gradient(circle at 12% 15%, rgba(159, 214, 136, 0.35), transparent 35%),
     radial-gradient(circle at 92% 8%, rgba(118, 182, 116, 0.26), transparent 36%),
-    linear-gradient(180deg, #edf8e8, #dcf0d7 58%, #d4ebd0);
+    url('./components/foto-cover-cemara.jpeg') center / cover no-repeat fixed;
 }
 
 h1,
