@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;600;700;800&display=swap');
+
+:root {
+  --green-950: #0f2b1d;
+  --green-900: #184b2c;
+  --green-700: #2e7546;
+  --green-500: #4f9d53;
+  --green-300: #9cd791;
+  --mist: #eff8ec;
+  font-family: 'Manrope', 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--green-950);
+  background-color: #e5f4de;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 12% 15%, rgba(159, 214, 136, 0.35), transparent 35%),
+    radial-gradient(circle at 92% 8%, rgba(118, 182, 116, 0.26), transparent 36%),
+    linear-gradient(180deg, #edf8e8, #dcf0d7 58%, #d4ebd0);
+}
+
+h1,
+h2,
+h3 {
+  font-family: 'Fraunces', Georgia, serif;
+}
+
+#root {
+  min-height: 100vh;
+}
