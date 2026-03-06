@@ -427,6 +427,28 @@ button:hover {
   font-weight: 700;
 }
 
+.site-footer {
+  border-radius: 1.2rem;
+  border: 1px solid rgba(76, 132, 84, 0.28);
+  background: linear-gradient(155deg, rgba(26, 88, 47, 0.95), rgba(43, 114, 63, 0.92));
+  color: #e9fde8;
+  padding: 1rem 1.15rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.site-footer p,
+.site-footer small {
+  margin: 0;
+}
+
+.site-footer small {
+  color: #cef3cc;
+}
+
 @keyframes drift {
   0%,
   100% {

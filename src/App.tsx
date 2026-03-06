@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import './App.css'
 import { supabase } from './components/supaBaseClient.ts'
+import Footer from './footer'
 
 type ScheduleItem = {
 	id: string
@@ -732,6 +733,7 @@ function App() {
 					</div>
 				</div>
 			</section>
+			<Footer />
 		</main>
 	)
 }
