@@ -15,9 +15,9 @@ function Footer() {
 			<div className="footer-links">
 				<p>Quick Access</p>
 				<div>
-					<a href="#">Schedules</a>
-					<a href="#">Memories</a>
-					<a href="#">Circle Profiles</a>
+					<a href="#schedule-section">Schedules</a>
+					<a href="#memory-section">Memories</a>
+					<a href="#profiles-section">Circle Profiles</a>
 				</div>
 			</div>
 

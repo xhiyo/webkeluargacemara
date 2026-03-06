@@ -537,7 +537,7 @@ function App() {
 				{dbNotice ? <p className="db-notice">{dbNotice}</p> : null}
 			</section>
 
-			<section className="panel friend-panel">
+			<section id="profiles-section" className="panel friend-panel">
 				<div className="panel-head">
 					<h2>Our 6-Person Circle</h2>
 					<p>Everyone has a profile so plans and memories feel personal.</p>
@@ -557,6 +557,7 @@ function App() {
 
 			<section className="grid-area">
 				<div className="panel schedule-panel">
+				<div id="schedule-section" />
 					<div className="panel-head">
 						<h2>Circle Schedule</h2>
 						<p>
@@ -641,6 +642,7 @@ function App() {
 				</div>
 
 				<div className="panel memory-panel">
+					<div id="memory-section" />
 					<div className="panel-head">
 						<h2>Memory Photos</h2>
 						<p>
