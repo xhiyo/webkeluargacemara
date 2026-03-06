@@ -215,19 +215,43 @@ function App() {
 			return
 		}
 
-		const numericId = Number(editingHeroPhotoId)
-		const updateResult = Number.isNaN(numericId)
-			? await supabase
-					.from('title')
-					.update({ titleName: nextTitle })
-					.eq('titleId', editingHeroPhotoId)
-			: await supabase
+		let updatedCommitted = false
+		let updateError = ''
+
+		const byString = await supabase
+			.from('title')
+			.update({ titleName: nextTitle })
+			.eq('titleId', editingHeroPhotoId)
+			.select('titleId')
+
+		if (byString.error) {
+			updateError = byString.error.message
+		} else if ((byString.data ?? []).length > 0) {
+			updatedCommitted = true
+		}
+
+		if (!updatedCommitted) {
+			const numericId = Number(editingHeroPhotoId)
+
+			if (!Number.isNaN(numericId)) {
+				const byNumber = await supabase
 					.from('title')
 					.update({ titleName: nextTitle })
 					.eq('titleId', numericId)
+					.select('titleId')
 
-		if (updateResult.error) {
-			setDbNotice(`Update title failed: ${updateResult.error.message}`)
+				if (byNumber.error) {
+					updateError = byNumber.error.message || updateError
+				} else if ((byNumber.data ?? []).length > 0) {
+					updatedCommitted = true
+				}
+			}
+		}
+
+		if (!updatedCommitted) {
+			setDbNotice(
+				`Title update not committed. ${updateError || 'Check RLS UPDATE policy for table title.'}`,
+			)
 			return
 		}
 
