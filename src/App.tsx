@@ -54,7 +54,6 @@ type TitleRow = {
 }
 
 type HeroPhoto = {
-	titleId: string
 	src: string
 	alt: string
 	caption: string
@@ -163,28 +162,10 @@ function App() {
 	const [isLoadingMemories, setIsLoadingMemories] = useState(true)
 	const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null)
 	const [editingCaption, setEditingCaption] = useState('')
-	const [heroPhotos, setHeroPhotos] = useState<HeroPhoto[]>([
-		{
-			titleId: 'local-1',
-			src: coverCemara,
-			alt: 'Keluarga Cemara circle cover',
-			caption: 'Foto Cover Keluarga Cemara',
-		},
-		{
-			titleId: 'local-2',
-			src: cemaraOne,
-			alt: 'Keluarga Cemara photo 1',
-			caption: 'Cemara 1',
-		},
-		{
-			titleId: 'local-3',
-			src: cemaraTwo,
-			alt: 'Keluarga Cemara photo 2',
-			caption: 'Cemara 2',
-		},
-	])
-	const [editingHeroPhotoId, setEditingHeroPhotoId] = useState<string | null>(null)
-	const [heroTitleDraft, setHeroTitleDraft] = useState('')
+	const [coverPhotoTitle, setCoverPhotoTitle] = useState('Foto Cover Keluarga Cemara')
+	const [coverTitleDraft, setCoverTitleDraft] = useState('Foto Cover Keluarga Cemara')
+	const [isEditingCoverTitle, setIsEditingCoverTitle] = useState(false)
+	const [coverTitleId, setCoverTitleId] = useState<string | null>(null)
 	const [activeHeroPhoto, setActiveHeroPhoto] = useState<HeroPhoto | null>(null)
 	const [dbNotice, setDbNotice] = useState('')
 	const todayLabel = new Date().toLocaleDateString(undefined, {
@@ -198,83 +179,143 @@ function App() {
 		[schedules],
 	)
 
-	const saveHeroPhotoTitle = async () => {
-		if (!editingHeroPhotoId) {
-			return
+	const heroPhotos: HeroPhoto[] = useMemo(
+		() => [
+			{
+				src: coverCemara,
+				alt: 'Keluarga Cemara circle cover',
+				caption: coverPhotoTitle,
+			},
+			{
+				src: cemaraOne,
+				alt: 'Keluarga Cemara photo 1',
+				caption: 'Cemara 1',
+			},
+			{
+				src: cemaraTwo,
+				alt: 'Keluarga Cemara photo 2',
+				caption: 'Cemara 2',
+			},
+		],
+		[coverPhotoTitle],
+	)
+
+	const heroPhotoFallbacks = [coverCemara, cemaraOne, cemaraTwo]
+
+	const byNewestTitleId = (a: TitleRow, b: TitleRow) => {
+		const aNum = Number(a.titleId)
+		const bNum = Number(b.titleId)
+
+		if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {
+			return bNum - aNum
 		}
 
-		const nextTitle = heroTitleDraft.trim()
+		return String(b.titleId).localeCompare(String(a.titleId))
+	}
+
+	const refreshCoverTitleFromDatabase = async () => {
+		const { data, error } = await supabase
+			.from('title')
+			.select('titleId, titleName, titlePhotoUrl')
+
+		if (error) {
+			setDbNotice((prev) =>
+				prev
+					? `${prev} | Title load failed: ${error.message}`
+					: `Title load failed: ${error.message}`,
+			)
+			return false
+		}
+
+		const rows = (data ?? []) as TitleRow[]
+		const coverMatches = rows
+			.filter(
+				(row) =>
+					String(row.titlePhotoUrl ?? '').includes('foto-cover-cemara') ||
+					String(row.titlePhotoUrl ?? '') === String(coverCemara),
+			)
+			.sort(byNewestTitleId)
+
+		const coverRow = coverMatches[0] ?? rows.sort(byNewestTitleId)[0]
+
+		if (!coverRow) {
+			return false
+		}
+
+		setCoverTitleId(String(coverRow.titleId))
+		const loadedTitle = String(coverRow.titleName ?? '').trim()
+		if (loadedTitle) {
+			setCoverPhotoTitle(loadedTitle)
+			setCoverTitleDraft(loadedTitle)
+		}
+
+		return true
+	}
+
+	const saveCoverTitle = async () => {
+		const nextTitle = coverTitleDraft.trim()
 
 		if (!nextTitle) {
 			return
 		}
 
-		const targetPhoto = heroPhotos.find((photo) => photo.titleId === editingHeroPhotoId)
+		let targetTitleId = coverTitleId
+		let errorText = ''
 
-		if (!targetPhoto) {
-			return
-		}
-
-		let updatedCommitted = false
-		let updateError = ''
-
-		const byString = await supabase
-			.from('title')
-			.update({ titleName: nextTitle })
-			.eq('titleId', editingHeroPhotoId)
-			.select('titleId')
-
-		if (byString.error) {
-			updateError = byString.error.message
-		} else if ((byString.data ?? []).length > 0) {
-			updatedCommitted = true
-		}
-
-		if (!updatedCommitted) {
-			const numericId = Number(editingHeroPhotoId)
-
-			if (!Number.isNaN(numericId)) {
-				const byNumber = await supabase
-					.from('title')
-					.update({ titleName: nextTitle })
-					.eq('titleId', numericId)
-					.select('titleId')
-
-				if (byNumber.error) {
-					updateError = byNumber.error.message || updateError
-				} else if ((byNumber.data ?? []).length > 0) {
-					updatedCommitted = true
-				}
+		if (!targetTitleId) {
+			const refreshed = await refreshCoverTitleFromDatabase()
+			if (refreshed) {
+				targetTitleId = coverTitleId
 			}
 		}
 
-		if (!updatedCommitted) {
-			setDbNotice(
-				`Title update not committed. ${updateError || 'Check RLS UPDATE policy for table title.'}`,
-			)
-			return
+		let committed = false
+
+		if (targetTitleId) {
+			const numericId = Number(targetTitleId)
+			const updateResult = Number.isNaN(numericId)
+				? await supabase
+						.from('title')
+						.update({ titleName: nextTitle })
+						.eq('titleId', targetTitleId)
+						.select('titleId')
+				: await supabase
+						.from('title')
+						.update({ titleName: nextTitle })
+						.eq('titleId', numericId)
+						.select('titleId')
+
+			if (updateResult.error) {
+				errorText = updateResult.error.message
+			} else if ((updateResult.data ?? []).length > 0) {
+				committed = true
+			}
 		}
 
-		setHeroPhotos((prev) =>
-			prev.map((photo) =>
-				photo.titleId === editingHeroPhotoId
-					? {
-							...photo,
-							caption: nextTitle,
-						}
-					: photo,
-			),
-		)
-		setEditingHeroPhotoId(null)
-		setHeroTitleDraft('')
-		setDbNotice('Cover title updated in database.')
+		if (!committed) {
+			const inserted = await supabase
+				.from('title')
+				.insert([{ titleName: nextTitle, titlePhotoUrl: coverCemara }])
+				.select('titleId')
+				.single()
+
+			if (inserted.error || !inserted.data) {
+				setDbNotice(
+					`Title not updated. ${inserted.error?.message || errorText || 'Check RLS UPDATE policy on table title.'}`,
+				)
+				return
+			}
+
+			setCoverTitleId(String((inserted.data as { titleId: string | number }).titleId))
+		}
+
+		setCoverPhotoTitle(nextTitle)
+		setIsEditingCoverTitle(false)
+		await refreshCoverTitleFromDatabase()
+		setDbNotice('Cover title updated and refreshed from database.')
 
 		setActiveHeroPhoto((prev) => {
-			if (!prev) {
-				return prev
-			}
-
-			if (prev.titleId !== targetPhoto.titleId) {
+			if (!prev || prev.src !== coverCemara) {
 				return prev
 			}
 
@@ -285,14 +326,9 @@ function App() {
 		})
 	}
 
-	const cancelHeroPhotoTitleEdit = () => {
-		setEditingHeroPhotoId(null)
-		setHeroTitleDraft('')
-	}
-
-	const startHeroPhotoTitleEdit = (photo: HeroPhoto) => {
-		setEditingHeroPhotoId(photo.titleId)
-		setHeroTitleDraft(photo.caption)
+	const cancelCoverTitleEdit = () => {
+		setCoverTitleDraft(coverPhotoTitle)
+		setIsEditingCoverTitle(false)
 	}
 
 	useEffect(() => {
@@ -353,67 +389,9 @@ function App() {
 			setIsLoadingMemories(false)
 		}
 
-		const loadHeroTitles = async () => {
-			const { data, error } = await supabase
-				.from('title')
-				.select('titleId, titleName, titlePhotoUrl')
-				.order('titleId', { ascending: true })
-
-			if (error) {
-				setDbNotice((prev) =>
-					prev ? `${prev} | Title load failed: ${error.message}` : `Title load failed: ${error.message}`,
-				)
-				return
-			}
-
-			const rows = (data ?? []) as TitleRow[]
-
-			if (rows.length === 0) {
-				const seedRows = [
-					{ titleName: 'Foto Cover Keluarga Cemara', titlePhotoUrl: coverCemara },
-					{ titleName: 'Cemara 1', titlePhotoUrl: cemaraOne },
-					{ titleName: 'Cemara 2', titlePhotoUrl: cemaraTwo },
-				]
-
-				const seedResult = await supabase
-					.from('title')
-					.insert(seedRows)
-					.select('titleId, titleName, titlePhotoUrl')
-
-				if (seedResult.error) {
-					setDbNotice((prev) =>
-						prev
-							? `${prev} | Title seed failed: ${seedResult.error?.message ?? ''}`
-							: `Title seed failed: ${seedResult.error?.message ?? ''}`,
-					)
-					return
-				}
-
-				const seeded = (seedResult.data ?? []) as TitleRow[]
-				setHeroPhotos(
-					seeded.map((row, index) => ({
-						titleId: String(row.titleId ?? `title-${index}`),
-						src: String(row.titlePhotoUrl ?? ''),
-						alt: `Keluarga Cemara photo ${index + 1}`,
-						caption: String(row.titleName ?? `Cemara ${index + 1}`),
-					})),
-				)
-				return
-			}
-
-			setHeroPhotos(
-				rows.map((row, index) => ({
-					titleId: String(row.titleId ?? `title-${index}`),
-					src: String(row.titlePhotoUrl ?? ''),
-					alt: `Keluarga Cemara photo ${index + 1}`,
-					caption: String(row.titleName ?? `Cemara ${index + 1}`),
-				})),
-			)
-		}
-
 		void loadSchedules()
 		void loadMemories()
-		void loadHeroTitles()
+		void refreshCoverTitleFromDatabase()
 	}, [])
 
 	useEffect(() => {
@@ -720,30 +698,37 @@ function App() {
 					our circle feel like home.
 				</p>
 				<div className="hero-photo-gallery" aria-label="Keluarga Cemara photos">
-					{heroPhotos.map((photo) => (
-						<figure key={photo.src} className="hero-photo-showcase">
+					{heroPhotos.map((photo, index) => (
+						<figure key={photo.caption} className="hero-photo-showcase">
 							<button
 								type="button"
 								className="hero-photo-trigger"
 								onClick={() => setActiveHeroPhoto(photo)}
 							>
-								<img src={photo.src} alt={photo.alt} />
+								<img
+									src={photo.src || heroPhotoFallbacks[index]}
+									alt={photo.alt}
+									onError={(event) => {
+										event.currentTarget.onerror = null
+										event.currentTarget.src = heroPhotoFallbacks[index]
+									}}
+								/>
 							</button>
 							<figcaption className="hero-photo-caption">
-								{editingHeroPhotoId === photo.titleId ? (
+								{index === 0 && isEditingCoverTitle ? (
 									<div className="cover-title-edit">
 										<input
 											type="text"
-											value={heroTitleDraft}
-											onChange={(event) => setHeroTitleDraft(event.target.value)}
+											value={coverTitleDraft}
+											onChange={(event) => setCoverTitleDraft(event.target.value)}
 										/>
-										<button type="button" onClick={saveHeroPhotoTitle}>
-											Save
+										<button type="button" onClick={saveCoverTitle}>
+											Save changes
 										</button>
 										<button
 											type="button"
 											className="secondary"
-											onClick={cancelHeroPhotoTitleEdit}
+											onClick={cancelCoverTitleEdit}
 										>
 											Cancel
 										</button>
@@ -751,13 +736,15 @@ function App() {
 								) : (
 									<>
 										<span>{photo.caption}</span>
-										<button
-											type="button"
-											className="cover-title-btn"
-											onClick={() => startHeroPhotoTitleEdit(photo)}
-										>
-											Edit title
-										</button>
+										{index === 0 ? (
+											<button
+												type="button"
+												className="cover-title-btn"
+												onClick={() => setIsEditingCoverTitle(true)}
+											>
+												Edit title
+											</button>
+										) : null}
 									</>
 								)}
 							</figcaption>
