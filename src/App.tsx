@@ -43,6 +43,19 @@ type MemoryRow = {
 	memoryPhotosUrl: string
 }
 
+const mapMemoryRowToPhoto = (row: MemoryRow, index: number): MemoryPhoto => {
+	const memoryId = String(row.memoryId ?? `m-${index}`)
+
+	return {
+		id: memoryId,
+		memoryId,
+		src: String(row.memoryPhotosUrl ?? ''),
+		caption: String(row.memoryName ?? 'Memory'),
+		date: '',
+		uploaded: true,
+	}
+}
+
 const fileToDataUrl = (file: File) =>
 	new Promise<string>((resolve, reject) => {
 		const reader = new FileReader()
@@ -197,18 +210,7 @@ function App() {
 				return
 			}
 
-			const mapped = ((data ?? []) as MemoryRow[]).map((row, index) => {
-				const memoryId = String(row.memoryId ?? `m-${index}`)
-
-				return {
-					id: memoryId,
-					memoryId,
-					src: String(row.memoryPhotosUrl ?? ''),
-					caption: String(row.memoryName ?? 'Memory'),
-					date: '',
-					uploaded: true,
-				}
-			})
+			const mapped = ((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto)
 
 			setMemories(mapped)
 			setIsLoadingMemories(false)
@@ -216,6 +218,36 @@ function App() {
 
 		void loadSchedules()
 		void loadMemories()
+	}, [])
+
+	useEffect(() => {
+		const refreshMemories = async () => {
+			const { data, error } = await supabase
+				.from('memoryId')
+				.select('memoryId, memoryName, memoryPhotosUrl')
+
+			if (error) {
+				setDbNotice(`Realtime memory sync failed: ${error.message}`)
+				return
+			}
+
+			setMemories(((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto))
+		}
+
+		const memoryChannel = supabase
+			.channel('memory-realtime-sync')
+			.on(
+				'postgres_changes',
+				{ event: '*', schema: 'public', table: 'memoryId' },
+				() => {
+					void refreshMemories()
+				},
+			)
+			.subscribe()
+
+		return () => {
+			void supabase.removeChannel(memoryChannel)
+		}
 	}, [])
 
 	const handleAddSchedule = async (event: FormEvent<HTMLFormElement>) => {
@@ -358,18 +390,7 @@ function App() {
 			return
 		}
 
-		const insertedMemories = ((data ?? []) as MemoryRow[]).map((row, index) => {
-			const memoryId = String(row.memoryId ?? `m-${Date.now()}-${index}`)
-
-			return {
-				id: memoryId,
-				memoryId,
-				src: String(row.memoryPhotosUrl ?? ''),
-				caption: String(row.memoryName ?? ''),
-				date: new Date().toLocaleDateString(),
-				uploaded: true,
-			}
-		})
+		const insertedMemories = ((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto)
 
 		setMemories((prev) => [...insertedMemories, ...prev])
 		setCaption('')
