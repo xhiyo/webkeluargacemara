@@ -433,19 +433,34 @@ function App() {
 		}
 
 		let deleteError = ''
+		let deletedCommitted = false
 		const numericId = Number(target.memoryId)
 
 		const primaryDelete = Number.isNaN(numericId)
-			? await supabase.from('memoryId').delete().eq('memoryId', target.memoryId)
-			: await supabase.from('memoryId').delete().eq('memoryId', numericId)
+			? await supabase
+					.from('memoryId')
+					.delete()
+					.eq('memoryId', target.memoryId)
+					.select('memoryId')
+			: await supabase
+					.from('memoryId')
+					.delete()
+					.eq('memoryId', numericId)
+					.select('memoryId')
 
 		if (primaryDelete.error) {
 			deleteError = primaryDelete.error.message
+		} else if ((primaryDelete.data ?? []).length > 0) {
+			deletedCommitted = true
+		}
+
+		if (!deletedCommitted) {
 			const fallbackDelete = await supabase
 				.from('memoryId')
 				.delete()
 				.eq('memoryName', target.caption)
 				.eq('memoryPhotosUrl', target.src)
+				.select('memoryId')
 
 			if (fallbackDelete.error) {
 				setDbNotice(
@@ -453,6 +468,17 @@ function App() {
 				)
 				return
 			}
+
+			if ((fallbackDelete.data ?? []).length > 0) {
+				deletedCommitted = true
+			}
+		}
+
+		if (!deletedCommitted) {
+			setDbNotice(
+				'Delete was not committed in Supabase. Check RLS DELETE policy for table memoryId.',
+			)
+			return
 		}
 
 		setMemories((prev) => prev.filter((photo) => photo.id !== id))
