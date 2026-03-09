@@ -78,6 +78,18 @@ const mapMemoryRowToPhoto = (row: MemoryRow, index: number): MemoryPhoto => {
 	}
 }
 
+const sortMemoriesByNewest = (photos: MemoryPhoto[]) =>
+	[...photos].sort((a, b) => {
+		const aNum = Number(a.memoryId)
+		const bNum = Number(b.memoryId)
+
+		if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {
+			return bNum - aNum
+		}
+
+		return String(b.memoryId).localeCompare(String(a.memoryId))
+	})
+
 const fileToDataUrl = (file: File) =>
 	new Promise<string>((resolve, reject) => {
 		const reader = new FileReader()
@@ -108,43 +120,43 @@ const friendProfiles: FriendProfile[] = [
 	{
 		id: 1,
 		name: 'Candice',
-		role: 'Planner',
-		favoriteActivity: 'Picnic checklists',
+		role: 'Member',
+		favoriteActivity: 'Cari Matcha',
 		avatar: candicePhoto,
 	},
 	{
 		id: 2,
 		name: 'Adinda',
-		role: 'Photographer',
-		favoriteActivity: 'Golden hour portraits',
+		role: 'Member',
+		favoriteActivity: 'Wombat Ngajleng',
 		avatar: adindaPhoto,
 	},
 	{
 		id: 3,
 		name: 'Fasa',
-		role: 'DJ',
-		favoriteActivity: 'Road-trip playlists',
+		role: 'Member',
+		favoriteActivity: 'Ibu Negara ',
 		avatar: fasaPhoto,
 	},
 	{
 		id: 4,
 		name: 'Fabian',
-		role: 'Chef',
-		favoriteActivity: 'Cooking for hangouts',
+		role: 'Member',
+		favoriteActivity: 'Pemimpin Gereja Katolik Roma',
 		avatar: fabianPhoto,
 	},
 	{
 		id: 5,
 		name: 'Ganta',
-		role: 'Storykeeper',
-		favoriteActivity: 'Memory journaling',
+		role: 'Aktivis',
+		favoriteActivity: 'Tukang Kebun, Supir TJ, Tukang Gali Kubur',
 		avatar: gantaPhoto,
 	},
 	{
 		id: 6,
 		name: 'Jonathan',
-		role: 'Navigator',
-		favoriteActivity: 'Weekend route planning',
+		role: 'Admin Loh Ya',
+		favoriteActivity: 'Gitaris NDC Terbaik Di Bumi',
 		avatar: jonathanPhoto,
 	},
 ]
@@ -162,14 +174,15 @@ function App() {
 	const [isLoadingMemories, setIsLoadingMemories] = useState(true)
 	const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null)
 	const [editingCaption, setEditingCaption] = useState('')
-	const [coverPhotoTitle, setCoverPhotoTitle] = useState('Foto Cover Keluarga Cemara')
-	const [cemaraOneTitle, setCemaraOneTitle] = useState('Cemara 1')
-	const [cemaraTwoTitle, setCemaraTwoTitle] = useState('Cemara 2')
+	const [coverPhotoTitle, setCoverPhotoTitle] = useState('Ulang Tahun Candice')
+	const [cemaraOneTitle, setCemaraOneTitle] = useState('Ulang Tahun Jonathan')
+	const [cemaraTwoTitle, setCemaraTwoTitle] = useState('Last Day')
 	const [coverTitleDraft, setCoverTitleDraft] = useState('Foto Cover Keluarga Cemara')
 	const [editingHeroPhotoIndex, setEditingHeroPhotoIndex] = useState<number | null>(null)
 	const [coverTitleId, setCoverTitleId] = useState<string | null>(null)
 	const [activeHeroPhoto, setActiveHeroPhoto] = useState<HeroPhoto | null>(null)
 	const [activeFriendPhoto, setActiveFriendPhoto] = useState<FriendProfile | null>(null)
+	const [activeMemoryPhoto, setActiveMemoryPhoto] = useState<MemoryPhoto | null>(null)
 	const [dbNotice, setDbNotice] = useState('')
 	const todayLabel = new Date().toLocaleDateString(undefined, {
 		weekday: 'long',
@@ -415,7 +428,9 @@ function App() {
 				return
 			}
 
-			const mapped = ((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto)
+			const mapped = sortMemoriesByNewest(
+				((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto),
+			)
 
 			setMemories(mapped)
 			setIsLoadingMemories(false)
@@ -437,7 +452,9 @@ function App() {
 				return
 			}
 
-			setMemories(((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto))
+			setMemories(
+				sortMemoriesByNewest(((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto)),
+			)
 		}
 
 		const memoryChannel = supabase
@@ -598,7 +615,7 @@ function App() {
 
 		const insertedMemories = ((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto)
 
-		setMemories((prev) => [...insertedMemories, ...prev])
+		setMemories((prev) => sortMemoriesByNewest([...insertedMemories, ...prev]))
 		setCaption('')
 		setDbNotice('Memory photo saved to Supabase.')
 
@@ -947,7 +964,14 @@ function App() {
 					<div className="memory-grid">
 						{memories.map((photo) => (
 							<figure key={photo.id} className="memory-card">
-								<img src={photo.src} alt={photo.caption} />
+								<button
+									type="button"
+									className="memory-photo-trigger"
+									onClick={() => setActiveMemoryPhoto(photo)}
+								>
+									<img src={photo.src} alt={photo.caption} />
+									<span className="memory-hover-chip">View full photo</span>
+								</button>
 								<figcaption>
 									{editingMemoryId === photo.id ? (
 										<div className="memory-edit-form">
@@ -980,6 +1004,13 @@ function App() {
 												{photo.uploaded ? ' · uploaded' : ''}
 											</small>
 											<div className="memory-actions">
+												<button
+													type="button"
+													className="memory-view-btn"
+													onClick={() => setActiveMemoryPhoto(photo)}
+												>
+													View full
+												</button>
 												<button
 													type="button"
 													onClick={() => startEditMemory(photo)}
@@ -1049,6 +1080,33 @@ function App() {
 						<img src={activeFriendPhoto.avatar} alt={`${activeFriendPhoto.name} full photo`} />
 						<p>
 							{activeFriendPhoto.name} · {activeFriendPhoto.role}
+						</p>
+					</div>
+				</div>
+			) : null}
+
+			{activeMemoryPhoto ? (
+				<div
+					className="hero-lightbox"
+					onClick={() => setActiveMemoryPhoto(null)}
+					role="dialog"
+					aria-modal="true"
+				>
+					<div
+						className="hero-lightbox-card memory-lightbox-card"
+						onClick={(event) => event.stopPropagation()}
+					>
+						<button
+							type="button"
+							className="hero-lightbox-close"
+							onClick={() => setActiveMemoryPhoto(null)}
+						>
+							Close
+						</button>
+						<img src={activeMemoryPhoto.src} alt={activeMemoryPhoto.caption} />
+						<p>
+							{activeMemoryPhoto.caption}
+							{activeMemoryPhoto.date ? ` · ${activeMemoryPhoto.date}` : ''}
 						</p>
 					</div>
 				</div>

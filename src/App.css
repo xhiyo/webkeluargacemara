@@ -537,8 +537,8 @@ button:hover {
 .memory-grid {
   margin-top: 1rem;
   display: grid;
-  gap: 0.8rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .memory-card {
@@ -547,13 +547,73 @@ button:hover {
   border-radius: 1rem;
   background: #f2fcf0;
   border: 1px solid rgba(92, 148, 89, 0.24);
+  transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+}
+
+.memory-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(92, 148, 89, 0.45);
+  box-shadow: 0 14px 26px rgba(34, 82, 53, 0.2);
+}
+
+.memory-photo-trigger {
+  position: relative;
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: zoom-in;
+  overflow: hidden;
+}
+
+.memory-photo-trigger::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(5, 22, 12, 0.04), rgba(5, 22, 12, 0.5));
+  opacity: 0;
+  transition: opacity 0.26s ease;
+  pointer-events: none;
 }
 
 .memory-card img {
   display: block;
   width: 100%;
-  height: 150px;
+  height: 185px;
   object-fit: cover;
+  transition: transform 0.28s ease;
+}
+
+.memory-card:hover img {
+  transform: scale(1.11);
+}
+
+.memory-hover-chip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -40%);
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(230, 255, 225, 0.6);
+  background: rgba(6, 33, 16, 0.62);
+  color: #f0ffec;
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.26s ease, transform 0.26s ease;
+  pointer-events: none;
+}
+
+.memory-card:hover .memory-photo-trigger::before {
+  opacity: 1;
+}
+
+.memory-card:hover .memory-hover-chip {
+  opacity: 1;
+  transform: translate(-50%, -50%);
 }
 
 .memory-card figcaption {
@@ -570,6 +630,18 @@ button:hover {
   color: #547a5f;
 }
 
+.memory-lightbox-card {
+  width: min(900px, 96vw);
+}
+
+.memory-lightbox-card img {
+  display: block;
+  width: 100%;
+  max-height: 78vh;
+  object-fit: contain;
+  background: rgba(7, 26, 14, 0.9);
+}
+
 .memory-actions {
   margin-top: 0.55rem;
   display: flex;
@@ -579,6 +651,10 @@ button:hover {
 .memory-actions button {
   padding: 0.42rem 0.62rem;
   font-size: 0.8rem;
+}
+
+.memory-view-btn {
+  background: linear-gradient(140deg, #4ba85a, #2d7a3d);
 }
 
 .memory-edit-form {
