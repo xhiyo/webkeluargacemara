@@ -1079,6 +1079,11 @@ button:hover {
 
   .schedule-list li {
     flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .list-actions {
+    justify-content: flex-start;
   }
 
   .hero-photo-gallery {
