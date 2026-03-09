@@ -6,6 +6,12 @@ import Footer from './footer'
 import coverCemara from './components/foto-cover-cemara.jpeg'
 import cemaraOne from './components/cemara-1.jpeg'
 import cemaraTwo from './components/cemara-2.jpeg'
+import candicePhoto from './components/candice.jpeg'
+import adindaPhoto from './components/adinda.jpeg'
+import fasaPhoto from './components/fasa.jpeg'
+import fabianPhoto from './components/fabian.jpeg'
+import gantaPhoto from './components/ganta.jpeg'
+import jonathanPhoto from './components/jonathan.PNG'
 
 type ScheduleItem = {
 	id: string
@@ -101,51 +107,45 @@ const splitScheduleTime = (value: string) => {
 const friendProfiles: FriendProfile[] = [
 	{
 		id: 1,
-		name: 'Alya',
+		name: 'Candice',
 		role: 'Planner',
 		favoriteActivity: 'Picnic checklists',
-		avatar:
-			'https://images.unsplash.com/photo-1489424731084-a5d8b219a5bb?auto=format&fit=crop&w=600&q=80',
+		avatar: candicePhoto,
 	},
 	{
 		id: 2,
-		name: 'Bima',
+		name: 'Adinda',
 		role: 'Photographer',
 		favoriteActivity: 'Golden hour portraits',
-		avatar:
-			'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=600&q=80',
+		avatar: adindaPhoto,
 	},
 	{
 		id: 3,
-		name: 'Citra',
+		name: 'Fasa',
 		role: 'DJ',
 		favoriteActivity: 'Road-trip playlists',
-		avatar:
-			'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80',
+		avatar: fasaPhoto,
 	},
 	{
 		id: 4,
-		name: 'Dion',
+		name: 'Fabian',
 		role: 'Chef',
 		favoriteActivity: 'Cooking for hangouts',
-		avatar:
-			'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80',
+		avatar: fabianPhoto,
 	},
 	{
 		id: 5,
-		name: 'Eka',
+		name: 'Ganta',
 		role: 'Storykeeper',
 		favoriteActivity: 'Memory journaling',
-		avatar:
-			'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=600&q=80',
+		avatar: gantaPhoto,
 	},
 	{
 		id: 6,
-		name: 'Fajar',
+		name: 'Jonathan',
 		role: 'Navigator',
 		favoriteActivity: 'Weekend route planning',
-		avatar:
-			'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
+		avatar: jonathanPhoto,
 	},
 ]
 
@@ -163,10 +163,13 @@ function App() {
 	const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null)
 	const [editingCaption, setEditingCaption] = useState('')
 	const [coverPhotoTitle, setCoverPhotoTitle] = useState('Foto Cover Keluarga Cemara')
+	const [cemaraOneTitle, setCemaraOneTitle] = useState('Cemara 1')
+	const [cemaraTwoTitle, setCemaraTwoTitle] = useState('Cemara 2')
 	const [coverTitleDraft, setCoverTitleDraft] = useState('Foto Cover Keluarga Cemara')
-	const [isEditingCoverTitle, setIsEditingCoverTitle] = useState(false)
+	const [editingHeroPhotoIndex, setEditingHeroPhotoIndex] = useState<number | null>(null)
 	const [coverTitleId, setCoverTitleId] = useState<string | null>(null)
 	const [activeHeroPhoto, setActiveHeroPhoto] = useState<HeroPhoto | null>(null)
+	const [activeFriendPhoto, setActiveFriendPhoto] = useState<FriendProfile | null>(null)
 	const [dbNotice, setDbNotice] = useState('')
 	const todayLabel = new Date().toLocaleDateString(undefined, {
 		weekday: 'long',
@@ -189,15 +192,15 @@ function App() {
 			{
 				src: cemaraOne,
 				alt: 'Keluarga Cemara photo 1',
-				caption: 'Cemara 1',
+				caption: cemaraOneTitle,
 			},
 			{
 				src: cemaraTwo,
 				alt: 'Keluarga Cemara photo 2',
-				caption: 'Cemara 2',
+				caption: cemaraTwoTitle,
 			},
 		],
-		[coverPhotoTitle],
+		[coverPhotoTitle, cemaraOneTitle, cemaraTwoTitle],
 	)
 
 	const heroPhotoFallbacks = [coverCemara, cemaraOne, cemaraTwo]
@@ -310,7 +313,7 @@ function App() {
 		}
 
 		setCoverPhotoTitle(nextTitle)
-		setIsEditingCoverTitle(false)
+		setEditingHeroPhotoIndex(null)
 		await refreshCoverTitleFromDatabase()
 		setDbNotice('Cover title updated and refreshed from database.')
 
@@ -327,8 +330,37 @@ function App() {
 	}
 
 	const cancelCoverTitleEdit = () => {
-		setCoverTitleDraft(coverPhotoTitle)
-		setIsEditingCoverTitle(false)
+		if (editingHeroPhotoIndex === 1) {
+			setCoverTitleDraft(cemaraOneTitle)
+		} else if (editingHeroPhotoIndex === 2) {
+			setCoverTitleDraft(cemaraTwoTitle)
+		} else {
+			setCoverTitleDraft(coverPhotoTitle)
+		}
+
+		setEditingHeroPhotoIndex(null)
+	}
+
+	const saveHeroPhotoTitle = async (index: number) => {
+		if (index === 0) {
+			await saveCoverTitle()
+			return
+		}
+
+		const nextTitle = coverTitleDraft.trim()
+		if (!nextTitle) {
+			return
+		}
+
+		if (index === 1) {
+			setCemaraOneTitle(nextTitle)
+		}
+
+		if (index === 2) {
+			setCemaraTwoTitle(nextTitle)
+		}
+
+		setEditingHeroPhotoIndex(null)
 	}
 
 	useEffect(() => {
@@ -699,7 +731,7 @@ function App() {
 				</p>
 				<div className="hero-photo-gallery" aria-label="Keluarga Cemara photos">
 					{heroPhotos.map((photo, index) => (
-						<figure key={photo.caption} className="hero-photo-showcase">
+						<figure key={`${photo.src}-${index}`} className="hero-photo-showcase">
 							<button
 								type="button"
 								className="hero-photo-trigger"
@@ -715,14 +747,14 @@ function App() {
 								/>
 							</button>
 							<figcaption className="hero-photo-caption">
-								{index === 0 && isEditingCoverTitle ? (
+								{editingHeroPhotoIndex === index ? (
 									<div className="cover-title-edit">
 										<input
 											type="text"
 											value={coverTitleDraft}
 											onChange={(event) => setCoverTitleDraft(event.target.value)}
 										/>
-										<button type="button" onClick={saveCoverTitle}>
+										<button type="button" onClick={() => void saveHeroPhotoTitle(index)}>
 											Save changes
 										</button>
 										<button
@@ -736,15 +768,16 @@ function App() {
 								) : (
 									<>
 										<span>{photo.caption}</span>
-										{index === 0 ? (
-											<button
-												type="button"
-												className="cover-title-btn"
-												onClick={() => setIsEditingCoverTitle(true)}
-											>
-												Edit title
-											</button>
-										) : null}
+										<button
+											type="button"
+											className="cover-title-btn"
+											onClick={() => {
+												setCoverTitleDraft(photo.caption)
+												setEditingHeroPhotoIndex(index)
+											}}
+										>
+											Edit title
+										</button>
 									</>
 								)}
 							</figcaption>
@@ -777,7 +810,13 @@ function App() {
 				<div className="friend-circle" aria-label="Friend circle profiles">
 					{friendProfiles.map((friend) => (
 						<article key={friend.id} className="friend-card">
-							<img src={friend.avatar} alt={`${friend.name} profile`} />
+							<button
+								type="button"
+								className="friend-photo-trigger"
+								onClick={() => setActiveFriendPhoto(friend)}
+							>
+								<img src={friend.avatar} alt={`${friend.name} profile`} />
+							</button>
 							<h3>{friend.name}</h3>
 							<p>{friend.role}</p>
 							<small>{friend.favoriteActivity}</small>
@@ -985,6 +1024,32 @@ function App() {
 						</button>
 						<img src={activeHeroPhoto.src} alt={activeHeroPhoto.alt} />
 						<p>{activeHeroPhoto.caption}</p>
+					</div>
+				</div>
+			) : null}
+
+			{activeFriendPhoto ? (
+				<div
+					className="hero-lightbox"
+					onClick={() => setActiveFriendPhoto(null)}
+					role="dialog"
+					aria-modal="true"
+				>
+					<div
+						className="hero-lightbox-card friend-lightbox-card"
+						onClick={(event) => event.stopPropagation()}
+					>
+						<button
+							type="button"
+							className="hero-lightbox-close"
+							onClick={() => setActiveFriendPhoto(null)}
+						>
+							Close
+						</button>
+						<img src={activeFriendPhoto.avatar} alt={`${activeFriendPhoto.name} full photo`} />
+						<p>
+							{activeFriendPhoto.name} · {activeFriendPhoto.role}
+						</p>
 					</div>
 				</div>
 			) : null}
