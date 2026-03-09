@@ -415,6 +415,20 @@
   transform: scale(1.21);
 }
 
+.friend-card-ganta .friend-photo-trigger .smart-image {
+  width: 132px;
+  height: 132px;
+}
+
+.friend-card-ganta .friend-photo-trigger .smart-image img {
+  transform: scale(1.03);
+  object-position: center 20%;
+}
+
+.friend-card-ganta:hover .friend-photo-trigger .smart-image img {
+  transform: scale(1.08);
+}
+
 .friend-card h3 {
   margin: 0.55rem 0 0.1rem;
   font-size: 1.12rem;

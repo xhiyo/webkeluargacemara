@@ -777,7 +777,10 @@ function App() {
 
 				<div className="friend-circle" aria-label="Friend circle profiles">
 					{friendProfiles.map((friend) => (
-						<article key={friend.id} className="friend-card">
+						<article
+							key={friend.id}
+							className={`friend-card${friend.id === 5 ? ' friend-card-ganta' : ''}`}
+						>
 							<button
 								type="button"
 								className="friend-photo-trigger"
@@ -915,7 +918,7 @@ function App() {
 
 					<div className="upload-row">
 						<label>
-							Caption (optional)
+							Title
 							<input
 								type="text"
 								placeholder="Write ur caption here..."
