@@ -65,6 +65,15 @@ type HeroPhoto = {
 	caption: string
 }
 
+type SmartImageProps = {
+	src: string
+	alt: string
+	fallbackSrc?: string
+	className?: string
+}
+
+const loadedImageSrcCache = new Set<string>()
+
 const mapMemoryRowToPhoto = (row: MemoryRow, index: number): MemoryPhoto => {
 	const memoryId = String(row.memoryId ?? `m-${index}`)
 
@@ -116,6 +125,41 @@ const splitScheduleTime = (value: string) => {
 	return { date: '', time: value.slice(0, 5) }
 }
 
+const SmartImage = ({ src, alt, fallbackSrc, className }: SmartImageProps) => {
+	const [currentSrc, setCurrentSrc] = useState(src)
+	const [isLoaded, setIsLoaded] = useState(loadedImageSrcCache.has(src))
+
+	useEffect(() => {
+		setCurrentSrc(src)
+		setIsLoaded(loadedImageSrcCache.has(src))
+	}, [src])
+
+	return (
+		<span className={`smart-image ${isLoaded ? 'loaded' : ''} ${className ?? ''}`.trim()}>
+			<span className="smart-image-loader" aria-hidden="true">
+				<span className="smart-image-spinner" />
+			</span>
+			<img
+				src={currentSrc}
+				alt={alt}
+				onLoad={() => {
+					loadedImageSrcCache.add(currentSrc)
+					setIsLoaded(true)
+				}}
+				onError={() => {
+					if (fallbackSrc && currentSrc !== fallbackSrc) {
+						setCurrentSrc(fallbackSrc)
+						setIsLoaded(loadedImageSrcCache.has(fallbackSrc))
+						return
+					}
+
+					setIsLoaded(true)
+				}}
+			/>
+		</span>
+	)
+}
+
 const friendProfiles: FriendProfile[] = [
 	{
 		id: 1,
@@ -149,7 +193,7 @@ const friendProfiles: FriendProfile[] = [
 		id: 5,
 		name: 'Ganta',
 		role: 'Aktivis',
-		favoriteActivity: 'Tukang Kebun, Supir TJ, Tukang Gali Kubur',
+		favoriteActivity: 'Tukang Kebun, Supir TJ, Tukang Gali Kubur, Tukang Ngarit, Petani, Satpam, Tukang Fogging',
 		avatar: gantaPhoto,
 	},
 	{
@@ -175,11 +219,8 @@ function App() {
 	const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null)
 	const [editingCaption, setEditingCaption] = useState('')
 	const [coverPhotoTitle, setCoverPhotoTitle] = useState('Ulang Tahun Candice')
-	const [cemaraOneTitle, setCemaraOneTitle] = useState('Ulang Tahun Jonathan')
-	const [cemaraTwoTitle, setCemaraTwoTitle] = useState('Last Day')
-	const [coverTitleDraft, setCoverTitleDraft] = useState('Foto Cover Keluarga Cemara')
-	const [editingHeroPhotoIndex, setEditingHeroPhotoIndex] = useState<number | null>(null)
-	const [coverTitleId, setCoverTitleId] = useState<string | null>(null)
+	const cemaraOneTitle = 'Ulang Tahun Jonathan'
+	const cemaraTwoTitle = 'Last Day'
 	const [activeHeroPhoto, setActiveHeroPhoto] = useState<HeroPhoto | null>(null)
 	const [activeFriendPhoto, setActiveFriendPhoto] = useState<FriendProfile | null>(null)
 	const [activeMemoryPhoto, setActiveMemoryPhoto] = useState<MemoryPhoto | null>(null)
@@ -199,17 +240,17 @@ function App() {
 		() => [
 			{
 				src: coverCemara,
-				alt: 'Keluarga Cemara circle cover',
+				alt: '',
 				caption: coverPhotoTitle,
 			},
 			{
 				src: cemaraOne,
-				alt: 'Keluarga Cemara photo 1',
+				alt: '',
 				caption: cemaraOneTitle,
 			},
 			{
 				src: cemaraTwo,
-				alt: 'Keluarga Cemara photo 2',
+				alt: '',
 				caption: cemaraTwoTitle,
 			},
 		],
@@ -258,122 +299,12 @@ function App() {
 			return false
 		}
 
-		setCoverTitleId(String(coverRow.titleId))
 		const loadedTitle = String(coverRow.titleName ?? '').trim()
 		if (loadedTitle) {
 			setCoverPhotoTitle(loadedTitle)
-			setCoverTitleDraft(loadedTitle)
 		}
 
 		return true
-	}
-
-	const saveCoverTitle = async () => {
-		const nextTitle = coverTitleDraft.trim()
-
-		if (!nextTitle) {
-			return
-		}
-
-		let targetTitleId = coverTitleId
-		let errorText = ''
-
-		if (!targetTitleId) {
-			const refreshed = await refreshCoverTitleFromDatabase()
-			if (refreshed) {
-				targetTitleId = coverTitleId
-			}
-		}
-
-		let committed = false
-
-		if (targetTitleId) {
-			const numericId = Number(targetTitleId)
-			const updateResult = Number.isNaN(numericId)
-				? await supabase
-						.from('title')
-						.update({ titleName: nextTitle })
-						.eq('titleId', targetTitleId)
-						.select('titleId')
-				: await supabase
-						.from('title')
-						.update({ titleName: nextTitle })
-						.eq('titleId', numericId)
-						.select('titleId')
-
-			if (updateResult.error) {
-				errorText = updateResult.error.message
-			} else if ((updateResult.data ?? []).length > 0) {
-				committed = true
-			}
-		}
-
-		if (!committed) {
-			const inserted = await supabase
-				.from('title')
-				.insert([{ titleName: nextTitle, titlePhotoUrl: coverCemara }])
-				.select('titleId')
-				.single()
-
-			if (inserted.error || !inserted.data) {
-				setDbNotice(
-					`Title not updated. ${inserted.error?.message || errorText || 'Check RLS UPDATE policy on table title.'}`,
-				)
-				return
-			}
-
-			setCoverTitleId(String((inserted.data as { titleId: string | number }).titleId))
-		}
-
-		setCoverPhotoTitle(nextTitle)
-		setEditingHeroPhotoIndex(null)
-		await refreshCoverTitleFromDatabase()
-		setDbNotice('Cover title updated and refreshed from database.')
-
-		setActiveHeroPhoto((prev) => {
-			if (!prev || prev.src !== coverCemara) {
-				return prev
-			}
-
-			return {
-				...prev,
-				caption: nextTitle,
-			}
-		})
-	}
-
-	const cancelCoverTitleEdit = () => {
-		if (editingHeroPhotoIndex === 1) {
-			setCoverTitleDraft(cemaraOneTitle)
-		} else if (editingHeroPhotoIndex === 2) {
-			setCoverTitleDraft(cemaraTwoTitle)
-		} else {
-			setCoverTitleDraft(coverPhotoTitle)
-		}
-
-		setEditingHeroPhotoIndex(null)
-	}
-
-	const saveHeroPhotoTitle = async (index: number) => {
-		if (index === 0) {
-			await saveCoverTitle()
-			return
-		}
-
-		const nextTitle = coverTitleDraft.trim()
-		if (!nextTitle) {
-			return
-		}
-
-		if (index === 1) {
-			setCemaraOneTitle(nextTitle)
-		}
-
-		if (index === 2) {
-			setCemaraTwoTitle(nextTitle)
-		}
-
-		setEditingHeroPhotoIndex(null)
 	}
 
 	useEffect(() => {
@@ -533,7 +464,7 @@ function App() {
 			},
 			...prev,
 		])
-		setDbNotice('Schedule added to Supabase.')
+		setDbNotice('Schedule added Database.')
 		setTitle('')
 		setDate('')
 		setTime('')
@@ -617,7 +548,7 @@ function App() {
 
 		setMemories((prev) => sortMemoriesByNewest([...insertedMemories, ...prev]))
 		setCaption('')
-		setDbNotice('Memory photo saved to Supabase.')
+		setDbNotice('Memory photo saved to Database.')
 
 		event.target.value = ''
 	}
@@ -720,13 +651,13 @@ function App() {
 
 		if (!deletedCommitted) {
 			setDbNotice(
-				'Delete was not committed in Supabase. Check RLS DELETE policy for table memoryId.',
+				'Delete was not committed in Database. Check RLS DELETE policy for table memoryId.',
 			)
 			return
 		}
 
 		setMemories((prev) => prev.filter((photo) => photo.id !== id))
-		setDbNotice('Memory deleted from Supabase.')
+		setDbNotice('Memory deleted from Database.')
 
 		if (editingMemoryId === id) {
 			cancelEditMemory()
@@ -737,10 +668,9 @@ function App() {
 		<main className="circle-app">
 			<section className="hero">
 				<p className="hero-tag">keluarga cemara circle</p>
-				<h1>Keluarga Cemara: our circle of warmth, growth, and memories.</h1>
+				<h1>Keluarga Cemara: Friendship, Together, Forever, Telaga</h1>
 				<p className="hero-copy">
-					This cover represents our friendship like a cedar tree: rooted in trust,
-					standing through every season, and growing stronger together.
+					Cover foto ini menampilkan perjalanan pertemanan Keluarga Cemara sekilas, seperti air di tengah telaga yang tidak akan pernah habis begitu juga pertemanan kita.
 				</p>
 				<p className="hero-intro">
 					Here we plan our days, keep our promises, and store the moments that make
@@ -754,49 +684,14 @@ function App() {
 								className="hero-photo-trigger"
 								onClick={() => setActiveHeroPhoto(photo)}
 							>
-								<img
+								<SmartImage
 									src={photo.src || heroPhotoFallbacks[index]}
 									alt={photo.alt}
-									onError={(event) => {
-										event.currentTarget.onerror = null
-										event.currentTarget.src = heroPhotoFallbacks[index]
-									}}
+									fallbackSrc={heroPhotoFallbacks[index]}
 								/>
 							</button>
 							<figcaption className="hero-photo-caption">
-								{editingHeroPhotoIndex === index ? (
-									<div className="cover-title-edit">
-										<input
-											type="text"
-											value={coverTitleDraft}
-											onChange={(event) => setCoverTitleDraft(event.target.value)}
-										/>
-										<button type="button" onClick={() => void saveHeroPhotoTitle(index)}>
-											Save changes
-										</button>
-										<button
-											type="button"
-											className="secondary"
-											onClick={cancelCoverTitleEdit}
-										>
-											Cancel
-										</button>
-									</div>
-								) : (
-									<>
-										<span>{photo.caption}</span>
-										<button
-											type="button"
-											className="cover-title-btn"
-											onClick={() => {
-												setCoverTitleDraft(photo.caption)
-												setEditingHeroPhotoIndex(index)
-											}}
-										>
-											Edit title
-										</button>
-									</>
-								)}
+								<span>{photo.caption}</span>
 							</figcaption>
 						</figure>
 					))}
@@ -821,7 +716,7 @@ function App() {
 			<section id="profiles-section" className="panel friend-panel">
 				<div className="panel-head">
 					<h2>Our 6-Person Circle</h2>
-					<p>Everyone has a profile so plans and memories feel personal.</p>
+					<p>Anggota Keluarga Cemara</p>
 				</div>
 
 				<div className="friend-circle" aria-label="Friend circle profiles">
@@ -832,7 +727,7 @@ function App() {
 								className="friend-photo-trigger"
 								onClick={() => setActiveFriendPhoto(friend)}
 							>
-								<img src={friend.avatar} alt={`${friend.name} profile`} />
+								<SmartImage src={friend.avatar} alt={`${friend.name} profile`} />
 							</button>
 							<h3>{friend.name}</h3>
 							<p>{friend.role}</p>
@@ -846,11 +741,14 @@ function App() {
 				<div className="panel schedule-panel">
 				<div id="schedule-section" />
 					<div className="panel-head">
-						<h2>Circle Schedule</h2>
-						<p>
-							Capture every meetup and never miss your friend time.
-							{isLoadingSchedule ? ' Loading from Supabase...' : ''}
-						</p>
+						<h2>Keluarga Cemara Schedule</h2>
+						<p>Ini Buat Schedule atau Jadwal Kita Main Yaaaa.</p>
+						{isLoadingSchedule ? (
+							<div className="section-loading-indicator" aria-live="polite">
+								<span className="section-loading-dot" />
+								<span>Loading schedules...</span>
+							</div>
+						) : null}
 					</div>
 
 					<form className="schedule-form" onSubmit={handleAddSchedule}>
@@ -858,7 +756,7 @@ function App() {
 							Plan title
 							<input
 								type="text"
-								placeholder="Movie night at Sinta's house"
+								placeholder="Text here..."
 								value={title}
 								onChange={(event) => setTitle(event.target.value)}
 								required
@@ -899,6 +797,24 @@ function App() {
 					</form>
 
 					<ul className="schedule-list">
+						{isLoadingSchedule
+							? Array.from({ length: 3 }).map((_, index) => (
+									<li
+										key={`schedule-skeleton-${index}`}
+										className="schedule-skeleton"
+										aria-hidden="true"
+									>
+										<div className="schedule-skeleton-info">
+											<div className="schedule-skeleton-line schedule-skeleton-title" />
+											<div className="schedule-skeleton-line schedule-skeleton-subtitle" />
+										</div>
+										<div className="schedule-skeleton-actions">
+											<div className="schedule-skeleton-btn" />
+											<div className="schedule-skeleton-btn" />
+										</div>
+									</li>
+								))
+							: null}
 						{schedules.map((item) => (
 							<li key={item.id} className={item.done ? 'done' : ''}>
 								<div>
@@ -922,7 +838,7 @@ function App() {
 								</div>
 							</li>
 						))}
-						{schedules.length === 0 ? (
+						{schedules.length === 0 && !isLoadingSchedule ? (
 							<li className="empty">No plans yet. Add your first schedule.</li>
 						) : null}
 					</ul>
@@ -931,11 +847,14 @@ function App() {
 				<div className="panel memory-panel">
 					<div id="memory-section" />
 					<div className="panel-head">
-						<h2>Memory Photos</h2>
-						<p>
-							Look back at shared moments and upload new ones anytime.
-							{isLoadingMemories ? ' Loading from Supabase...' : ''}
-						</p>
+						<h2>Keluarga Cemara Memory Photos</h2>
+						<p>Foto Memori Kenangan Keluarga Cemara Disini Yaaa.</p>
+						{isLoadingMemories ? (
+							<div className="section-loading-indicator" aria-live="polite">
+								<span className="section-loading-dot" />
+								<span>Loading memory photos...</span>
+							</div>
+						) : null}
 					</div>
 
 					<div className="upload-row">
@@ -943,7 +862,7 @@ function App() {
 							Caption (optional)
 							<input
 								type="text"
-								placeholder="Camping under the stars"
+								placeholder="Write ur caption here..."
 								value={caption}
 								onChange={(event) => setCaption(event.target.value)}
 							/>
@@ -962,6 +881,21 @@ function App() {
 					</div>
 
 					<div className="memory-grid">
+						{isLoadingMemories
+							? Array.from({ length: 4 }).map((_, index) => (
+									<figure
+										key={`memory-skeleton-${index}`}
+										className="memory-card memory-card-skeleton"
+										aria-hidden="true"
+									>
+										<div className="memory-skeleton-image" />
+										<figcaption>
+											<div className="memory-skeleton-line memory-skeleton-title" />
+											<div className="memory-skeleton-line memory-skeleton-subtitle" />
+										</figcaption>
+									</figure>
+								))
+							: null}
 						{memories.map((photo) => (
 							<figure key={photo.id} className="memory-card">
 								<button
@@ -969,7 +903,7 @@ function App() {
 									className="memory-photo-trigger"
 									onClick={() => setActiveMemoryPhoto(photo)}
 								>
-									<img src={photo.src} alt={photo.caption} />
+									<SmartImage src={photo.src} alt={photo.caption} />
 									<span className="memory-hover-chip">View full photo</span>
 								</button>
 								<figcaption>
@@ -1004,13 +938,6 @@ function App() {
 												{photo.uploaded ? ' · uploaded' : ''}
 											</small>
 											<div className="memory-actions">
-												<button
-													type="button"
-													className="memory-view-btn"
-													onClick={() => setActiveMemoryPhoto(photo)}
-												>
-													View full
-												</button>
 												<button
 													type="button"
 													onClick={() => startEditMemory(photo)}
@@ -1053,7 +980,7 @@ function App() {
 						>
 							Close
 						</button>
-						<img src={activeHeroPhoto.src} alt={activeHeroPhoto.alt} />
+						<SmartImage src={activeHeroPhoto.src} alt={activeHeroPhoto.alt} />
 						<p>{activeHeroPhoto.caption}</p>
 					</div>
 				</div>
@@ -1077,7 +1004,10 @@ function App() {
 						>
 							Close
 						</button>
-						<img src={activeFriendPhoto.avatar} alt={`${activeFriendPhoto.name} full photo`} />
+						<SmartImage
+							src={activeFriendPhoto.avatar}
+							alt={`${activeFriendPhoto.name} full photo`}
+						/>
 						<p>
 							{activeFriendPhoto.name} · {activeFriendPhoto.role}
 						</p>
@@ -1103,7 +1033,7 @@ function App() {
 						>
 							Close
 						</button>
-						<img src={activeMemoryPhoto.src} alt={activeMemoryPhoto.caption} />
+						<SmartImage src={activeMemoryPhoto.src} alt={activeMemoryPhoto.caption} />
 						<p>
 							{activeMemoryPhoto.caption}
 							{activeMemoryPhoto.date ? ` · ${activeMemoryPhoto.date}` : ''}
