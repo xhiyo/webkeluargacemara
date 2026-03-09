@@ -576,26 +576,68 @@ function App() {
 			return
 		}
 
-		const { error } = await supabase
+		const replacementInsert = await supabase
 			.from('memoryId')
-			.update({ memoryName: nextCaption })
-			.eq('memoryId', target.memoryId)
+			.insert([
+				{
+					memoryName: nextCaption,
+					memoryPhotosUrl: target.src,
+				},
+			])
+			.select('memoryId, memoryName, memoryPhotosUrl')
+			.single()
 
-		if (error) {
-			setDbNotice(`Update memory failed: ${error.message}`)
+		if (replacementInsert.error || !replacementInsert.data) {
+			setDbNotice(`Edit memory failed: ${replacementInsert.error?.message || 'Insert replacement failed.'}`)
 			return
 		}
 
+		const replacementPhoto = mapMemoryRowToPhoto(replacementInsert.data as MemoryRow, 0)
+		const numericId = Number(target.memoryId)
+
+		const deleteOld = Number.isNaN(numericId)
+			? await supabase
+					.from('memoryId')
+					.delete()
+					.eq('memoryId', target.memoryId)
+					.select('memoryId')
+			: await supabase
+					.from('memoryId')
+					.delete()
+					.eq('memoryId', numericId)
+					.select('memoryId')
+
+		if (deleteOld.error || (deleteOld.data ?? []).length === 0) {
+			const fallbackDeleteOld = await supabase
+				.from('memoryId')
+				.delete()
+				.eq('memoryName', target.caption)
+				.eq('memoryPhotosUrl', target.src)
+				.select('memoryId')
+
+			if (fallbackDeleteOld.error || (fallbackDeleteOld.data ?? []).length === 0) {
+				setDbNotice(
+					'Title changed, but old memory row could not be removed. Please delete the duplicate old row manually.',
+				)
+			}
+		}
+
 		setMemories((prev) =>
-			prev.map((photo) =>
-				photo.id === id
-					? {
-							...photo,
-							caption: nextCaption,
-						}
-					: photo,
-			),
+			sortMemoriesByNewest([
+				replacementPhoto,
+				...prev.filter((photo) => photo.id !== id),
+			]),
 		)
+
+		setActiveMemoryPhoto((prev) => {
+			if (!prev || prev.id !== id) {
+				return prev
+			}
+
+			return replacementPhoto
+		})
+
+		setDbNotice('Memory title updated Database.')
 
 		cancelEditMemory()
 	}
