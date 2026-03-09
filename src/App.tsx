@@ -217,6 +217,7 @@ function App() {
 	const [caption, setCaption] = useState('')
 	const [isLoadingMemories, setIsLoadingMemories] = useState(true)
 	const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null)
+	const [savingMemoryId, setSavingMemoryId] = useState<string | null>(null)
 	const [editingCaption, setEditingCaption] = useState('')
 	const [coverPhotoTitle, setCoverPhotoTitle] = useState('Ulang Tahun Candice')
 	const cemaraOneTitle = 'Ulang Tahun Jonathan'
@@ -564,6 +565,10 @@ function App() {
 	}
 
 	const saveEditMemory = async (id: string) => {
+		if (savingMemoryId === id) {
+			return
+		}
+
 		const nextCaption = editingCaption.trim()
 
 		if (!nextCaption) {
@@ -576,70 +581,79 @@ function App() {
 			return
 		}
 
-		const replacementInsert = await supabase
-			.from('memoryId')
-			.insert([
-				{
-					memoryName: nextCaption,
-					memoryPhotosUrl: target.src,
-				},
-			])
-			.select('memoryId, memoryName, memoryPhotosUrl')
-			.single()
+		setSavingMemoryId(id)
 
-		if (replacementInsert.error || !replacementInsert.data) {
-			setDbNotice(`Edit memory failed: ${replacementInsert.error?.message || 'Insert replacement failed.'}`)
-			return
-		}
+		try {
 
-		const replacementPhoto = mapMemoryRowToPhoto(replacementInsert.data as MemoryRow, 0)
-		const numericId = Number(target.memoryId)
-
-		const deleteOld = Number.isNaN(numericId)
-			? await supabase
-					.from('memoryId')
-					.delete()
-					.eq('memoryId', target.memoryId)
-					.select('memoryId')
-			: await supabase
-					.from('memoryId')
-					.delete()
-					.eq('memoryId', numericId)
-					.select('memoryId')
-
-		if (deleteOld.error || (deleteOld.data ?? []).length === 0) {
-			const fallbackDeleteOld = await supabase
+			const replacementInsert = await supabase
 				.from('memoryId')
-				.delete()
-				.eq('memoryName', target.caption)
-				.eq('memoryPhotosUrl', target.src)
-				.select('memoryId')
+				.insert([
+					{
+						memoryName: nextCaption,
+						memoryPhotosUrl: target.src,
+					},
+				])
+				.select('memoryId, memoryName, memoryPhotosUrl')
+				.single()
 
-			if (fallbackDeleteOld.error || (fallbackDeleteOld.data ?? []).length === 0) {
+			if (replacementInsert.error || !replacementInsert.data) {
 				setDbNotice(
-					'Title changed, but old memory row could not be removed. Please delete the duplicate old row manually.',
+					`Edit memory failed: ${replacementInsert.error?.message || 'Insert replacement failed.'}`,
 				)
+				return
 			}
+
+			const replacementPhoto = mapMemoryRowToPhoto(replacementInsert.data as MemoryRow, 0)
+			const numericId = Number(target.memoryId)
+
+			const deleteOld = Number.isNaN(numericId)
+				? await supabase
+						.from('memoryId')
+						.delete()
+						.eq('memoryId', target.memoryId)
+						.select('memoryId')
+				: await supabase
+						.from('memoryId')
+						.delete()
+						.eq('memoryId', numericId)
+						.select('memoryId')
+
+			if (deleteOld.error || (deleteOld.data ?? []).length === 0) {
+				const fallbackDeleteOld = await supabase
+					.from('memoryId')
+					.delete()
+					.eq('memoryName', target.caption)
+					.eq('memoryPhotosUrl', target.src)
+					.select('memoryId')
+
+				if (fallbackDeleteOld.error || (fallbackDeleteOld.data ?? []).length === 0) {
+					setDbNotice(
+						'Title changed, but old memory row could not be removed. Please delete the duplicate old row manually.',
+					)
+				}
+			}
+
+			setMemories((prev) =>
+				sortMemoriesByNewest([
+					replacementPhoto,
+					...prev.filter((photo) => photo.id !== id),
+				]),
+			)
+
+			setActiveMemoryPhoto((prev) => {
+				if (!prev || prev.id !== id) {
+					return prev
+				}
+
+				return replacementPhoto
+			})
+
+			setDbNotice('Memory title updated Database.')
+
+			cancelEditMemory()
+		} finally {
+			setSavingMemoryId((prev) => (prev === id ? null : prev))
 		}
-
-		setMemories((prev) =>
-			sortMemoriesByNewest([
-				replacementPhoto,
-				...prev.filter((photo) => photo.id !== id),
-			]),
-		)
-
-		setActiveMemoryPhoto((prev) => {
-			if (!prev || prev.id !== id) {
-				return prev
-			}
-
-			return replacementPhoto
-		})
-
-		setDbNotice('Memory title updated Database.')
-
-		cancelEditMemory()
 	}
 
 	const deleteMemory = async (id: string) => {
@@ -956,16 +970,22 @@ function App() {
 												<input
 													type="text"
 													value={editingCaption}
+													disabled={savingMemoryId === photo.id}
 													onChange={(event) => setEditingCaption(event.target.value)}
 												/>
 											</label>
 											<div className="memory-actions">
-												<button type="button" onClick={() => saveEditMemory(photo.id)}>
-													Save
+												<button
+													type="button"
+													disabled={savingMemoryId === photo.id}
+													onClick={() => saveEditMemory(photo.id)}
+												>
+													{savingMemoryId === photo.id ? 'Saving...' : 'Save'}
 												</button>
 												<button
 													type="button"
 													className="secondary"
+													disabled={savingMemoryId === photo.id}
 													onClick={cancelEditMemory}
 												>
 													Cancel
