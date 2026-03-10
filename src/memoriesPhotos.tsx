@@ -299,7 +299,15 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 			return
 		}
 
-		const insertedMemories = ((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto)
+		const uploaderEmail = currentUserEmail?.trim() || 'Guest'
+		const insertedMemories = ((data ?? []) as MemoryRow[]).map((row, index) => {
+			const mapped = mapMemoryRowToPhoto(row, index)
+			if (!row.memoryAddedBy) {
+				return { ...mapped, addedBy: uploaderEmail }
+			}
+
+			return mapped
+		})
 
 		setMemories((prev) => sortMemoriesByNewest([...insertedMemories, ...prev]))
 		setCaption('')
@@ -373,10 +381,11 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 				return
 			}
 
-			const replacementPhoto = mapMemoryRowToPhoto(
-				safeReplacementInsert.data as MemoryRow,
-				0,
-			)
+			const replacementRaw = safeReplacementInsert.data as MemoryRow
+			const replacementPhoto = mapMemoryRowToPhoto(replacementRaw, 0)
+			const replacementWithOwner = !replacementRaw.memoryAddedBy
+				? { ...replacementPhoto, addedBy }
+				: replacementPhoto
 			const numericId = Number(target.memoryId)
 
 			const deleteOld = Number.isNaN(numericId)
@@ -408,7 +417,7 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 
 			setMemories((prev) =>
 				sortMemoriesByNewest([
-					replacementPhoto,
+					replacementWithOwner,
 					...prev.filter((photo) => photo.id !== id),
 				]),
 			)
@@ -418,7 +427,7 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 					return prev
 				}
 
-				return replacementPhoto
+				return replacementWithOwner
 			})
 
 			notify('Memory title updated Database.')
