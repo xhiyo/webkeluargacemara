@@ -24,6 +24,8 @@ const CLEAR_CHAT_OWNER_EMAIL = String(
 	import.meta.env.VITE_CLEAR_CHAT_OWNER_EMAIL ?? 'fabian.ardana@gmail.com',
 )
 const CLEAR_CHAT_DEVELOPER_PASSWORD = 'Bian2345#'
+const ONLINE_IDLE_TIMEOUT_MS = 60 * 1000
+const ONLINE_STALE_GRACE_MS = 20 * 1000
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase()
 
@@ -140,7 +142,11 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 	const [typingUsers, setTypingUsers] = useState<string[]>([])
 	const listRef = useRef<HTMLUListElement | null>(null)
 	const typingChannelRef = useRef<RealtimeChannel | null>(null)
+	const presenceChannelRef = useRef<RealtimeChannel | null>(null)
 	const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const onlineIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const presenceRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+	const isPresenceOnlineRef = useRef(false)
 
 	const myIdentity = useMemo(
 		() => (currentUserEmail?.trim() ? currentUserEmail.trim() : 'Guest'),
@@ -275,11 +281,18 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 	const syncOnlineUsers = (channel: RealtimeChannel) => {
 		const state = channel.presenceState()
 		const collected: string[] = []
+		const now = Date.now()
 
 		Object.values(state).forEach((presences) => {
 			;(presences as Array<Record<string, unknown>>).forEach((presence) => {
 				const email = String(presence.email ?? '').trim()
-				if (email) {
+				const lastActiveRaw = String(presence.lastActiveAt ?? '').trim()
+				const lastActiveMs = Date.parse(lastActiveRaw)
+				const isFresh =
+					!Number.isNaN(lastActiveMs) &&
+					now - lastActiveMs <= ONLINE_IDLE_TIMEOUT_MS + ONLINE_STALE_GRACE_MS
+
+				if (email && isFresh) {
 					collected.push(email)
 				}
 			})
@@ -319,19 +332,144 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 			.on('presence', { event: 'leave' }, () => {
 				syncOnlineUsers(presenceChannel)
 			})
-			.subscribe(async (status) => {
+			.subscribe((status) => {
 				if (status !== 'SUBSCRIBED') {
 					return
 				}
 
-				await presenceChannel.track({
-					email: myIdentity,
-					onlineAt: new Date().toISOString(),
-				})
+				const shouldStartOnline = document.visibilityState === 'visible'
+				if (shouldStartOnline) {
+					void presenceChannel.track({
+						email: myIdentity,
+						onlineAt: new Date().toISOString(),
+						lastActiveAt: new Date().toISOString(),
+					})
+					isPresenceOnlineRef.current = true
+				}
+
+				if (onlineIdleTimerRef.current) {
+					clearTimeout(onlineIdleTimerRef.current)
+				}
+
+				onlineIdleTimerRef.current = setTimeout(() => {
+					if (!presenceChannelRef.current || !isPresenceOnlineRef.current) {
+						return
+					}
+
+					void presenceChannelRef.current.untrack()
+					isPresenceOnlineRef.current = false
+				}, ONLINE_IDLE_TIMEOUT_MS)
 			})
 
+		presenceChannelRef.current = presenceChannel
+
+		const markActive = () => {
+			if (!presenceChannelRef.current || document.visibilityState !== 'visible') {
+				return
+			}
+
+			if (!isPresenceOnlineRef.current) {
+				void presenceChannelRef.current.track({
+					email: myIdentity,
+					onlineAt: new Date().toISOString(),
+					lastActiveAt: new Date().toISOString(),
+				})
+				isPresenceOnlineRef.current = true
+			} else {
+				void presenceChannelRef.current.track({
+					email: myIdentity,
+					lastActiveAt: new Date().toISOString(),
+				})
+			}
+
+			if (onlineIdleTimerRef.current) {
+				clearTimeout(onlineIdleTimerRef.current)
+			}
+
+			onlineIdleTimerRef.current = setTimeout(() => {
+				if (!presenceChannelRef.current || !isPresenceOnlineRef.current) {
+					return
+				}
+
+				void presenceChannelRef.current.untrack()
+				isPresenceOnlineRef.current = false
+			}, ONLINE_IDLE_TIMEOUT_MS)
+		}
+
+		const markInactive = () => {
+			if (onlineIdleTimerRef.current) {
+				clearTimeout(onlineIdleTimerRef.current)
+				onlineIdleTimerRef.current = null
+			}
+
+			if (!presenceChannelRef.current || !isPresenceOnlineRef.current) {
+				return
+			}
+
+			void presenceChannelRef.current.untrack()
+			isPresenceOnlineRef.current = false
+		}
+
+		const onVisibilityChange = () => {
+			if (document.visibilityState === 'visible') {
+				markActive()
+				return
+			}
+
+			markInactive()
+		}
+
+		const onBeforeUnload = () => {
+			markInactive()
+		}
+
+		document.addEventListener('visibilitychange', onVisibilityChange)
+		window.addEventListener('beforeunload', onBeforeUnload)
+		window.addEventListener('pagehide', onBeforeUnload)
+
+		const activityEvents: Array<keyof WindowEventMap> = [
+			'mousemove',
+			'keydown',
+			'scroll',
+			'click',
+			'touchstart',
+			'focus',
+		]
+
+		activityEvents.forEach((eventName) => {
+			window.addEventListener(eventName, markActive, { passive: true })
+		})
+
+		presenceRefreshTimerRef.current = setInterval(() => {
+			if (!presenceChannelRef.current) {
+				return
+			}
+
+			syncOnlineUsers(presenceChannelRef.current)
+		}, 10 * 1000)
+
 		return () => {
+			document.removeEventListener('visibilitychange', onVisibilityChange)
+			window.removeEventListener('beforeunload', onBeforeUnload)
+			window.removeEventListener('pagehide', onBeforeUnload)
+
+			activityEvents.forEach((eventName) => {
+				window.removeEventListener(eventName, markActive)
+			})
+
+			if (onlineIdleTimerRef.current) {
+				clearTimeout(onlineIdleTimerRef.current)
+				onlineIdleTimerRef.current = null
+			}
+
+			if (presenceRefreshTimerRef.current) {
+				clearInterval(presenceRefreshTimerRef.current)
+				presenceRefreshTimerRef.current = null
+			}
+
 			void presenceChannel.untrack()
+			isPresenceOnlineRef.current = false
+			presenceChannelRef.current = null
 			setOnlineUsers([])
 			void supabase.removeChannel(presenceChannel)
 		}
