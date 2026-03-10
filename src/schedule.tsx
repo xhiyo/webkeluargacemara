@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Dispatch, FormEvent, SetStateAction } from 'react'
 import { supabase } from './components/supaBaseClient.ts'
 
@@ -36,6 +36,13 @@ type ScheduleProps = {
 	onNotice?: Dispatch<SetStateAction<string>>
 	currentUserEmail?: string | null
 }
+
+const CLEAR_HISTORY_OWNER_EMAIL = String(
+	import.meta.env.VITE_CLEAR_CHAT_OWNER_EMAIL ?? 'fabian.ardana@gmail.com',
+)
+const CLEAR_HISTORY_DEVELOPER_PASSWORD = 'Bian2345#'
+
+const normalizeEmail = (value: string) => value.trim().toLowerCase()
 
 const splitScheduleTime = (value: string) => {
 	if (!value) {
@@ -121,41 +128,146 @@ function Schedule({ onCountChange, onNotice, currentUserEmail }: ScheduleProps) 
 	const [time, setTime] = useState('')
 	const [note, setNote] = useState('')
 	const [isLoadingSchedule, setIsLoadingSchedule] = useState(true)
+	const [isClearingHistory, setIsClearingHistory] = useState(false)
+
+	const canClearHistory = useMemo(
+		() => normalizeEmail(currentUserEmail ?? '') === normalizeEmail(CLEAR_HISTORY_OWNER_EMAIL),
+		[currentUserEmail],
+	)
+
+	const refreshSchedules = async () => {
+		setIsLoadingSchedule(true)
+
+		const { data, error } = await supabase.from('schedule').select('*')
+
+		if (error) {
+			onNotice?.(`Schedule load failed: ${error.message}`)
+			setIsLoadingSchedule(false)
+			return
+		}
+
+		const rows = (data ?? []) as ScheduleRow[]
+		const active = rows
+			.filter((row) => !isInScheduleHistory(row.scheduleHistory))
+			.map(mapScheduleRowToItem)
+			.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
+
+		const history = rows
+			.filter((row) => isInScheduleHistory(row.scheduleHistory))
+			.map(mapScheduleRowToHistory)
+			.sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
+
+		setSchedules(active)
+		setScheduleHistory(history)
+		setIsLoadingSchedule(false)
+	}
 
 	useEffect(() => {
 		onCountChange?.(schedules.length)
 	}, [onCountChange, schedules.length])
 
 	useEffect(() => {
-		const loadSchedules = async () => {
-			setIsLoadingSchedule(true)
+		void refreshSchedules()
+	}, [])
 
+	const clearScheduleHistory = async () => {
+		if (isClearingHistory) {
+			return
+		}
+
+		if (!canClearHistory) {
+			onNotice?.('Only owner account can clear schedule history.')
+			return
+		}
+
+		if (scheduleHistory.length === 0) {
+			onNotice?.('Schedule history is already empty.')
+			return
+		}
+
+		const clearPassword = window.prompt('Enter developer clear password:')
+		if (!clearPassword) {
+			return
+		}
+
+		if (clearPassword !== CLEAR_HISTORY_DEVELOPER_PASSWORD) {
+			onNotice?.('Clear history password is incorrect.')
+			return
+		}
+
+		const confirmed = window.confirm(
+			'Delete all completed schedule history for everyone? This cannot be undone.',
+		)
+
+		if (!confirmed) {
+			return
+		}
+
+		setIsClearingHistory(true)
+
+		try {
 			const { data, error } = await supabase.from('schedule').select('*')
 
 			if (error) {
-				onNotice?.(`Schedule load failed: ${error.message}`)
-				setIsLoadingSchedule(false)
+				onNotice?.(`Clear schedule history failed: ${error.message}`)
 				return
 			}
 
-			const rows = (data ?? []) as ScheduleRow[]
-			const active = rows
-				.filter((row) => !isInScheduleHistory(row.scheduleHistory))
-				.map(mapScheduleRowToItem)
-				.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
+			const historyRows = ((data ?? []) as ScheduleRow[]).filter((row) =>
+				isInScheduleHistory(row.scheduleHistory),
+			)
 
-			const history = rows
-				.filter((row) => isInScheduleHistory(row.scheduleHistory))
-				.map(mapScheduleRowToHistory)
-				.sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
+			if (historyRows.length === 0) {
+				setScheduleHistory([])
+				onNotice?.('Schedule history is already empty.')
+				return
+			}
 
-			setSchedules(active)
-			setScheduleHistory(history)
-			setIsLoadingSchedule(false)
+			let deletedCount = 0
+			let lastError = ''
+
+			for (const row of historyRows) {
+				const rawId = String(row.scheduleId ?? '').trim()
+				const numericId = Number(rawId)
+
+				const primaryDelete = Number.isNaN(numericId)
+					? await supabase.from('schedule').delete().eq('scheduleId', rawId)
+					: await supabase.from('schedule').delete().eq('scheduleId', numericId)
+
+				if (!primaryDelete.error) {
+					deletedCount += 1
+					continue
+				}
+
+				const fallbackBase = supabase
+					.from('schedule')
+					.delete()
+					.eq('scheduleName', String(row.scheduleName ?? ''))
+					.eq('scheduleTime', String(row.scheduleTime ?? ''))
+
+				const fallbackDelete = row.scheduleNote
+					? await fallbackBase.eq('scheduleNote', String(row.scheduleNote))
+					: await fallbackBase.is('scheduleNote', null)
+
+				if (!fallbackDelete.error) {
+					deletedCount += 1
+					continue
+				}
+
+				lastError = fallbackDelete.error.message
+			}
+
+			if (deletedCount === 0) {
+				onNotice?.(`Clear schedule history failed: ${lastError || 'No rows deleted.'}`)
+				return
+			}
+
+			await refreshSchedules()
+			onNotice?.(`Schedule history cleared (${deletedCount} item${deletedCount > 1 ? 's' : ''}).`)
+		} finally {
+			setIsClearingHistory(false)
 		}
-
-		void loadSchedules()
-	}, [])
+	}
 
 	const handleAddSchedule = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
@@ -506,7 +618,19 @@ function Schedule({ onCountChange, onNotice, currentUserEmail }: ScheduleProps) 
 			</ul>
 
 			<div className="history-wrap">
-				<h3>Schedule History</h3>
+				<div className="history-head">
+					<h3>Schedule History</h3>
+					{canClearHistory ? (
+						<button
+							type="button"
+							className="danger history-clear-btn"
+							onClick={clearScheduleHistory}
+							disabled={isClearingHistory || isLoadingSchedule}
+						>
+							{isClearingHistory ? 'Clearing...' : 'Clear History'}
+						</button>
+					) : null}
+				</div>
 				<ul className="schedule-history-list">
 					{scheduleHistory.map((entry) => (
 						<li key={entry.id}>
