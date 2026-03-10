@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import Footer from './footer'
 import MemoriesPhotos from './memoriesPhotos.tsx'
 import Schedule from './schedule.tsx'
 import Login from './login.tsx'
-import ActivityFeed from './activityFeed.tsx'
 import GlobalChat from './globalChat.tsx'
 import { supabase } from './components/supaBaseClient.ts'
 import coverCemara from './components/foto-cover-cemara.jpeg'
@@ -121,6 +120,7 @@ const friendProfiles: FriendProfile[] = [
 ]
 
 function App() {
+	const [appView, setAppView] = useState<'home' | 'password'>('home')
 	const [memoryCount, setMemoryCount] = useState(0)
 	const [scheduleCount, setScheduleCount] = useState(0)
 	const [isCheckingAuth, setIsCheckingAuth] = useState(true)
@@ -131,11 +131,12 @@ function App() {
 	const [activeHeroPhoto, setActiveHeroPhoto] = useState<HeroPhoto | null>(null)
 	const [activeFriendPhoto, setActiveFriendPhoto] = useState<FriendProfile | null>(null)
 	const [dbNotice, setDbNotice] = useState('')
-	const [showChangePassword, setShowChangePassword] = useState(false)
+	const [showProfileMenu, setShowProfileMenu] = useState(false)
 	const [currentPassword, setCurrentPassword] = useState('')
 	const [newPassword, setNewPassword] = useState('')
 	const [confirmNewPassword, setConfirmNewPassword] = useState('')
 	const [isChangingPassword, setIsChangingPassword] = useState(false)
+	const profileMenuRef = useRef<HTMLDivElement | null>(null)
 	const todayLabel = new Date().toLocaleDateString('id-ID', {
 		timeZone: 'Asia/Jakarta',
 		weekday: 'long',
@@ -166,6 +167,21 @@ function App() {
 
 	const heroPhotoFallbacks = [coverCemara, cemaraOne, cemaraTwo]
 
+	const profileInitials = useMemo(() => {
+		if (!memberEmail) {
+			return 'CM'
+		}
+
+		const local = memberEmail.split('@')[0] ?? ''
+		const parts = local.split(/[._-]/g).filter(Boolean)
+
+		if (parts.length >= 2) {
+			return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase()
+		}
+
+		return local.slice(0, 2).toUpperCase() || 'CM'
+	}, [memberEmail])
+
 	useEffect(() => {
 		const initAuth = async () => {
 			const { data, error } = await supabase.auth.getSession()
@@ -193,6 +209,28 @@ function App() {
 		}
 	}, [])
 
+	useEffect(() => {
+		if (!showProfileMenu) {
+			return
+		}
+
+		const onPointerDown = (event: MouseEvent) => {
+			if (!profileMenuRef.current) {
+				return
+			}
+
+			if (!profileMenuRef.current.contains(event.target as Node)) {
+				setShowProfileMenu(false)
+			}
+		}
+
+		document.addEventListener('mousedown', onPointerDown)
+
+		return () => {
+			document.removeEventListener('mousedown', onPointerDown)
+		}
+	}, [showProfileMenu])
+
 	const handleSignOut = async () => {
 		const { error } = await supabase.auth.signOut()
 
@@ -202,7 +240,8 @@ function App() {
 		}
 
 		setMemberEmail(null)
-		setShowChangePassword(false)
+		setAppView('home')
+		setShowProfileMenu(false)
 		setCurrentPassword('')
 		setNewPassword('')
 		setConfirmNewPassword('')
@@ -255,7 +294,7 @@ function App() {
 			}
 
 			setDbNotice('Password updated successfully.')
-			setShowChangePassword(false)
+			setAppView('home')
 			setCurrentPassword('')
 			setNewPassword('')
 			setConfirmNewPassword('')
@@ -290,22 +329,103 @@ function App() {
 		)
 	}
 
+	if (appView === 'password') {
+		return (
+			<main className="circle-app">
+				<section className="panel password-panel">
+					<div className="panel-head">
+						<h2>Change Password</h2>
+						<p>Update your account password from this page.</p>
+					</div>
+
+					<div className="password-page-layout">
+						<div className="change-password-box">
+							<label>
+								Current password
+								<input
+									type="password"
+									value={currentPassword}
+									onChange={(event) => setCurrentPassword(event.target.value)}
+									placeholder="Enter current password"
+								/>
+							</label>
+							<label>
+								New password
+								<input
+									type="password"
+									value={newPassword}
+									onChange={(event) => setNewPassword(event.target.value)}
+									placeholder="Minimum 8 characters"
+								/>
+							</label>
+							<label>
+								Confirm new password
+								<input
+									type="password"
+									value={confirmNewPassword}
+									onChange={(event) => setConfirmNewPassword(event.target.value)}
+									placeholder="Re-type password"
+								/>
+							</label>
+							<div className="list-actions">
+								<button type="button" onClick={handleChangePassword} disabled={isChangingPassword}>
+									{isChangingPassword ? 'Saving...' : 'Save Password'}
+								</button>
+								<button
+									type="button"
+									className="secondary"
+									onClick={() => setAppView('home')}
+								>
+									Back to Home
+								</button>
+								<button type="button" className="danger" onClick={handleSignOut}>
+									Sign out
+								</button>
+							</div>
+						</div>
+
+						<figure className="password-side-photo" aria-hidden="true">
+							<SmartImage src={cemaraTwo} alt="Keluarga Cemara" fallbackSrc={cemaraTwo} />
+							<figcaption>Keluarga Cemara</figcaption>
+						</figure>
+					</div>
+
+					{dbNotice ? <p className="db-notice">{dbNotice}</p> : null}
+				</section>
+			</main>
+		)
+	}
+
 	return (
 		<main className="circle-app">
 			<section className="hero">
 				{memberEmail ? (
-					<div className="hero-actions-top">
-						<button
-							type="button"
-							className="secondary hero-action-btn"
-							onClick={() => setShowChangePassword((prev) => !prev)}
-						>
-							{showChangePassword ? 'Cancel Password' : 'Change Password'}
-						</button>
-						<button type="button" className="secondary hero-action-btn" onClick={handleSignOut}>
-							Sign out
-						</button>
-					</div>
+						<div className="hero-actions-top" ref={profileMenuRef}>
+							<button
+								type="button"
+								className="profile-circle-btn"
+								onClick={() => setShowProfileMenu((prev) => !prev)}
+								aria-label="Open account menu"
+							>
+								{profileInitials}
+							</button>
+							{showProfileMenu ? (
+								<div className="profile-menu">
+									<button
+										type="button"
+										onClick={() => {
+											setShowProfileMenu(false)
+											setAppView('password')
+										}}
+									>
+										Change Password
+									</button>
+									<button type="button" className="danger" onClick={handleSignOut}>
+										Sign out
+									</button>
+								</div>
+							) : null}
+						</div>
 				) : null}
 				<p className="hero-tag">keluarga cemara circle</p>
 				<h1>Keluarga Cemara: Friendship, Together, Forever, Telaga</h1>
@@ -341,40 +461,6 @@ function App() {
 					<span className="hero-people">6 friends connected</span>
 					{memberEmail ? <span className="hero-people">Signed in: {memberEmail}</span> : null}
 				</div>
-				{showChangePassword ? (
-					<div className="change-password-box">
-						<label>
-							Current password
-							<input
-								type="password"
-								value={currentPassword}
-								onChange={(event) => setCurrentPassword(event.target.value)}
-								placeholder="Enter current password"
-							/>
-						</label>
-						<label>
-							New password
-							<input
-								type="password"
-								value={newPassword}
-								onChange={(event) => setNewPassword(event.target.value)}
-								placeholder="Minimum 8 characters"
-							/>
-						</label>
-						<label>
-							Confirm new password
-							<input
-								type="password"
-								value={confirmNewPassword}
-								onChange={(event) => setConfirmNewPassword(event.target.value)}
-								placeholder="Re-type password"
-							/>
-						</label>
-						<button type="button" onClick={handleChangePassword} disabled={isChangingPassword}>
-							{isChangingPassword ? 'Saving...' : 'Save Password'}
-						</button>
-					</div>
-				) : null}
 				<div className="hero-stats">
 					<article>
 						<span>{scheduleCount}</span>
@@ -430,7 +516,6 @@ function App() {
 				/>
 			</section>
 
-			<ActivityFeed onNotice={setDbNotice} />
 			<GlobalChat onNotice={setDbNotice} currentUserEmail={memberEmail} />
 			<Footer />
 
