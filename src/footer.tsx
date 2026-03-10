@@ -7,7 +7,7 @@ function Footer() {
 				<p className="footer-eyebrow">Keluarga Cemara</p>
 				<h3>Dibuat Sebagai Kenangan dan Friendship Keluarga Cemara</h3>
 				<p className="footer-copy">
-					Keep us Connected with one place for share our memories together and take all of u at the deepest side in our heart.
+					Keep us connected with one place to share our circle updates, schedules, and memory photos together.
 				</p>
 			</div>
 
@@ -23,7 +23,7 @@ function Footer() {
 			<div className="footer-meta">
 				<div className="footer-pill-row">
 					<span className="footer-pill">Green Theme</span>
-					<span className="footer-pill">Realtime Memories</span>
+					<span className="footer-pill">Fresh Memories</span>
 				</div>
 				<small>Always synced with our latest circle updates.</small>
 			</div>

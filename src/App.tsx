@@ -23,31 +23,6 @@ type ScheduleItem = {
 	done: boolean
 }
 
-type ScheduleHistoryItem = ScheduleItem & {
-	completedAt: string
-}
-
-const SCHEDULE_HISTORY_KEY = 'keluarga-cemara-schedule-history'
-const LOCAL_MEMORIES_KEY = 'keluarga-cemara-local-memories'
-
-const readScheduleHistory = (): ScheduleHistoryItem[] => {
-	try {
-		const raw = localStorage.getItem(SCHEDULE_HISTORY_KEY)
-		if (!raw) {
-			return []
-		}
-
-		const parsed = JSON.parse(raw) as ScheduleHistoryItem[]
-		return Array.isArray(parsed) ? parsed : []
-	} catch {
-		return []
-	}
-}
-
-const writeScheduleHistory = (history: ScheduleHistoryItem[]) => {
-	localStorage.setItem(SCHEDULE_HISTORY_KEY, JSON.stringify(history))
-}
-
 type MemoryPhoto = {
 	id: string
 	memoryId: string
@@ -65,11 +40,6 @@ type FriendProfile = {
 	avatar: string
 }
 
-type AppProps = {
-	sessionEmail: string
-	onOpenProfile: () => void
-}
-
 type ScheduleRow = {
 	scheduleId: string
 	scheduleName: string
@@ -83,10 +53,10 @@ type MemoryRow = {
 	memoryPhotosUrl: string
 }
 
-type MemoryInsertRow = {
-	memoryId?: number
-	memoryName: string
-	memoryPhotosUrl: string
+type TitleRow = {
+	titleId: string | number
+	titleName: string | null
+	titlePhotoUrl: string | null
 }
 
 type HeroPhoto = {
@@ -129,51 +99,6 @@ const sortMemoriesByNewest = (photos: MemoryPhoto[]) =>
 		return String(b.memoryId).localeCompare(String(a.memoryId))
 	})
 
-const readLocalMemories = (): MemoryPhoto[] => {
-	try {
-		const raw = localStorage.getItem(LOCAL_MEMORIES_KEY)
-		if (!raw) {
-			return []
-		}
-
-		const parsed = JSON.parse(raw) as MemoryPhoto[]
-		if (!Array.isArray(parsed)) {
-			return []
-		}
-
-		return parsed.map((memory, index) => ({
-			id: String(memory.id ?? `local-${index}`),
-			memoryId: String(memory.memoryId ?? memory.id ?? `local-${index}`),
-			src: String(memory.src ?? ''),
-			caption: String(memory.caption ?? 'Memory'),
-			date: String(memory.date ?? ''),
-			uploaded: false,
-		}))
-	} catch {
-		return []
-	}
-}
-
-const writeLocalMemories = (memories: MemoryPhoto[]) => {
-	localStorage.setItem(LOCAL_MEMORIES_KEY, JSON.stringify(memories))
-}
-
-const mergeDbAndLocalMemories = (dbMemories: MemoryPhoto[], localMemories: MemoryPhoto[]) => {
-	const byId = new Map<string, MemoryPhoto>()
-
-	for (const memory of localMemories) {
-		byId.set(memory.id, memory)
-	}
-
-	for (const memory of dbMemories) {
-		byId.set(memory.id, memory)
-	}
-
-	return sortMemoriesByNewest(Array.from(byId.values()))
-}
-
-const keepOnlyLocalMemories = (memories: MemoryPhoto[]) => memories.filter((item) => !item.uploaded)
-
 const fileToDataUrl = (file: File) =>
 	new Promise<string>((resolve, reject) => {
 		const reader = new FileReader()
@@ -181,44 +106,6 @@ const fileToDataUrl = (file: File) =>
 		reader.onerror = () => reject(new Error('Failed reading image file.'))
 		reader.readAsDataURL(file)
 	})
-
-const sanitizeFileName = (rawName: string) =>
-	rawName
-		.toLowerCase()
-		.replace(/[^a-z0-9._-]+/g, '-')
-		.replace(/-+/g, '-')
-		.replace(/^-|-$/g, '') || 'photo'
-
-const uploadMemoryPhotoToStorage = async (file: File) => {
-	const extension = file.name.includes('.')
-		? file.name.slice(file.name.lastIndexOf('.'))
-		: ''
-	const safeBaseName = sanitizeFileName(file.name.replace(/\.[^/.]+$/, ''))
-	const path = `memories/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeBaseName}${extension}`
-
-	const { error: uploadError } = await supabase.storage
-		.from('memory-photos')
-		.upload(path, file, {
-			cacheControl: '3600',
-			upsert: false,
-			contentType: file.type,
-		})
-
-	if (uploadError) {
-		throw new Error(uploadError.message)
-	}
-
-	const { data } = supabase.storage.from('memory-photos').getPublicUrl(path)
-	return data.publicUrl
-}
-
-const resolveMemoryPhotoSource = async (file: File) => {
-	try {
-		return await uploadMemoryPhotoToStorage(file)
-	} catch {
-		return await fileToDataUrl(file)
-	}
-}
 
 const splitScheduleTime = (value: string) => {
 	if (!value) {
@@ -318,11 +205,8 @@ const friendProfiles: FriendProfile[] = [
 	},
 ]
 
-function App({ sessionEmail, onOpenProfile }: AppProps) {
+function App() {
 	const [schedules, setSchedules] = useState<ScheduleItem[]>([])
-	const [scheduleHistory, setScheduleHistory] = useState<ScheduleHistoryItem[]>(
-		() => readScheduleHistory(),
-	)
 	const [title, setTitle] = useState('')
 	const [date, setDate] = useState('')
 	const [time, setTime] = useState('')
@@ -335,7 +219,7 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 	const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null)
 	const [savingMemoryId, setSavingMemoryId] = useState<string | null>(null)
 	const [editingCaption, setEditingCaption] = useState('')
-	const coverPhotoTitle = 'Ulang Tahun Candice'
+	const [coverPhotoTitle, setCoverPhotoTitle] = useState('Ulang Tahun Candice')
 	const cemaraOneTitle = 'Ulang Tahun Jonathan'
 	const cemaraTwoTitle = 'Last Day'
 	const [activeHeroPhoto, setActiveHeroPhoto] = useState<HeroPhoto | null>(null)
@@ -352,11 +236,6 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 		() => schedules.filter((item) => !item.done).length,
 		[schedules],
 	)
-
-	const profileInitial = useMemo(() => {
-		const cleanEmail = sessionEmail.trim()
-		return cleanEmail ? cleanEmail[0]!.toUpperCase() : 'U'
-	}, [sessionEmail])
 
 	const heroPhotos: HeroPhoto[] = useMemo(
 		() => [
@@ -381,9 +260,53 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 
 	const heroPhotoFallbacks = [coverCemara, cemaraOne, cemaraTwo]
 
-	useEffect(() => {
-		writeScheduleHistory(scheduleHistory)
-	}, [scheduleHistory])
+	const byNewestTitleId = (a: TitleRow, b: TitleRow) => {
+		const aNum = Number(a.titleId)
+		const bNum = Number(b.titleId)
+
+		if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {
+			return bNum - aNum
+		}
+
+		return String(b.titleId).localeCompare(String(a.titleId))
+	}
+
+	const refreshCoverTitleFromDatabase = async () => {
+		const { data, error } = await supabase
+			.from('title')
+			.select('titleId, titleName, titlePhotoUrl')
+
+		if (error) {
+			setDbNotice((prev) =>
+				prev
+					? `${prev} | Title load failed: ${error.message}`
+					: `Title load failed: ${error.message}`,
+			)
+			return false
+		}
+
+		const rows = (data ?? []) as TitleRow[]
+		const coverMatches = rows
+			.filter(
+				(row) =>
+					String(row.titlePhotoUrl ?? '').includes('foto-cover-cemara') ||
+					String(row.titlePhotoUrl ?? '') === String(coverCemara),
+			)
+			.sort(byNewestTitleId)
+
+		const coverRow = coverMatches[0] ?? rows.sort(byNewestTitleId)[0]
+
+		if (!coverRow) {
+			return false
+		}
+
+		const loadedTitle = String(coverRow.titleName ?? '').trim()
+		if (loadedTitle) {
+			setCoverPhotoTitle(loadedTitle)
+		}
+
+		return true
+	}
 
 	useEffect(() => {
 		const loadSchedules = async () => {
@@ -422,7 +345,6 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 
 		const loadMemories = async () => {
 			setIsLoadingMemories(true)
-			const localMemories = readLocalMemories()
 
 			const { data, error } = await supabase
 				.from('memoryId')
@@ -434,39 +356,36 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 						? `${prev} | Memory load failed: ${error.message}`
 						: `Memory load failed: ${error.message}`,
 				)
-				setMemories(sortMemoriesByNewest(localMemories))
 				setIsLoadingMemories(false)
 				return
 			}
 
-			const mapped = ((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto)
+			const mapped = sortMemoriesByNewest(
+				((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto),
+			)
 
-			setMemories(mergeDbAndLocalMemories(mapped, localMemories))
+			setMemories(mapped)
 			setIsLoadingMemories(false)
 		}
 
 		void loadSchedules()
 		void loadMemories()
+		void refreshCoverTitleFromDatabase()
 	}, [])
 
 	useEffect(() => {
 		const refreshMemories = async () => {
-			const localMemories = readLocalMemories()
 			const { data, error } = await supabase
 				.from('memoryId')
 				.select('memoryId, memoryName, memoryPhotosUrl')
 
 			if (error) {
 				setDbNotice(`Realtime memory sync failed: ${error.message}`)
-				setMemories(sortMemoriesByNewest(localMemories))
 				return
 			}
 
 			setMemories(
-				mergeDbAndLocalMemories(
-					((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto),
-					localMemories,
-				),
+				sortMemoriesByNewest(((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto)),
 			)
 		}
 
@@ -485,10 +404,6 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 			void supabase.removeChannel(memoryChannel)
 		}
 	}, [])
-
-	useEffect(() => {
-		writeLocalMemories(keepOnlyLocalMemories(memories))
-	}, [memories])
 
 	const handleAddSchedule = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
@@ -558,32 +473,22 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 	}
 
 	const toggleDone = async (id: string) => {
-		const target = schedules.find((item) => item.id === id)
+		const nextDone = !schedules.find((item) => item.id === id)?.done
 
-		if (!target) {
+		if (typeof nextDone !== 'boolean') {
 			return
 		}
 
-		const { error } = await supabase
-			.from('schedule')
-			.delete()
-			.eq('scheduleId', target.scheduleId)
-
-		if (error) {
-			setDbNotice(`Complete schedule failed: ${error.message}`)
-			return
-		}
-
-		setSchedules((prev) => prev.filter((item) => item.id !== id))
-		setScheduleHistory((prev) => [
-			{
-				...target,
-				done: true,
-				completedAt: new Date().toLocaleString(),
-			},
-			...prev.filter((item) => item.scheduleId !== target.scheduleId),
-		])
-		setDbNotice('Schedule moved to history.')
+		setSchedules((prev) =>
+			prev.map((item) =>
+				item.id === id
+					? {
+							...item,
+							done: nextDone,
+						}
+					: item,
+			),
+		)
 	}
 
 	const deleteSchedule = async (id: string) => {
@@ -622,66 +527,25 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 			return
 		}
 
-		const captionBase = caption.trim()
-		const uploadRows: MemoryInsertRow[] = await Promise.all(
+		const uploadRows = await Promise.all(
 			imageFiles.map(async (file) => ({
-				memoryName: captionBase || file.name.replace(/\.[^/.]+$/, ''),
-				memoryPhotosUrl: await resolveMemoryPhotoSource(file),
+				memoryName: caption.trim() || file.name.replace(/\.[^/.]+$/, ''),
+				memoryPhotosUrl: await fileToDataUrl(file),
 			})),
 		)
 
-		let insertedData: MemoryRow[] = []
-		let insertError = ''
+		const { data, error } = await supabase
+			.from('memoryId')
+			.insert(uploadRows)
+			.select('*')
 
-		const insertTry = await supabase.from('memoryId').insert(uploadRows).select('*')
-
-		if (!insertTry.error) {
-			insertedData = (insertTry.data ?? []) as MemoryRow[]
-		} else {
-			insertError = insertTry.error.message
-
-			const startId = Date.now() * 1000
-			const fallbackRows: MemoryInsertRow[] = uploadRows.map((row, index) => ({
-				...row,
-				memoryId: startId + index,
-			}))
-
-			const fallbackInsert = await supabase
-				.from('memoryId')
-				.insert(fallbackRows)
-				.select('*')
-
-			if (!fallbackInsert.error) {
-				insertedData = (fallbackInsert.data ?? []) as MemoryRow[]
-			} else {
-				insertError = `${insertError} | fallback: ${fallbackInsert.error.message}`
-			}
-		}
-
-		if (insertedData.length === 0) {
-			const now = Date.now()
-			const localRows: MemoryPhoto[] = uploadRows.map((row, index) => {
-				const localId = `local-${now}-${index}`
-				return {
-					id: localId,
-					memoryId: localId,
-					src: row.memoryPhotosUrl,
-					caption: row.memoryName,
-					date: '',
-					uploaded: false,
-				}
-			})
-
-			setMemories((prev) => sortMemoriesByNewest([...localRows, ...prev]))
-			setCaption('')
-			setDbNotice(
-				`Saved locally on this device (DB insert blocked): ${insertError || 'Unknown insert error.'}`,
-			)
+		if (error) {
+			setDbNotice(`Create memory failed: ${error.message}`)
 			event.target.value = ''
 			return
 		}
 
-		const insertedMemories = insertedData.map(mapMemoryRowToPhoto)
+		const insertedMemories = ((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto)
 
 		setMemories((prev) => sortMemoriesByNewest([...insertedMemories, ...prev]))
 		setCaption('')
@@ -714,32 +578,6 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 		const target = memories.find((photo) => photo.id === id)
 
 		if (!target) {
-			return
-		}
-
-		if (!target.uploaded) {
-			setMemories((prev) =>
-				prev.map((photo) =>
-					photo.id === id
-						? {
-							...photo,
-							caption: nextCaption,
-						}
-						: photo,
-				),
-			)
-			setActiveMemoryPhoto((prev) => {
-				if (!prev || prev.id !== id) {
-					return prev
-				}
-
-				return {
-					...prev,
-					caption: nextCaption,
-				}
-			})
-			setDbNotice('Local memory title updated on this device.')
-			cancelEditMemory()
 			return
 		}
 
@@ -825,15 +663,6 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 			return
 		}
 
-		if (!target.uploaded) {
-			setMemories((prev) => prev.filter((photo) => photo.id !== id))
-			setDbNotice('Local memory deleted from this device.')
-			if (editingMemoryId === id) {
-				cancelEditMemory()
-			}
-			return
-		}
-
 		let deleteError = ''
 		let deletedCommitted = false
 		const numericId = Number(target.memoryId)
@@ -894,18 +723,6 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 	return (
 		<main className="circle-app">
 			<section className="hero">
-				<button
-					type="button"
-					className="hero-profile-entry"
-					onClick={onOpenProfile}
-					aria-label="Open profile menu"
-					title="Profile"
-				>
-					<span className="hero-profile-initial" aria-hidden="true">
-						{profileInitial}
-					</span>
-					<span className="hero-profile-text">Profile</span>
-				</button>
 				<p className="hero-tag">keluarga cemara circle</p>
 				<h1>Keluarga Cemara: Friendship, Together, Forever, Telaga</h1>
 				<p className="hero-copy">
@@ -957,9 +774,6 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 					<h2>Our 6-Person Circle</h2>
 					<p>Anggota Keluarga Cemara</p>
 				</div>
-				<p className="profile-change-note">
-					Ges kalau mau ganti profile bilang aku ya "Fabian"
-				</p>
 
 				<div className="friend-circle" aria-label="Friend circle profiles">
 					{friendProfiles.map((friend) => (
@@ -1061,7 +875,7 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 								))
 							: null}
 						{schedules.map((item) => (
-							<li key={item.id}>
+							<li key={item.id} className={item.done ? 'done' : ''}>
 								<div>
 									<p>{item.title}</p>
 									<small>
@@ -1071,7 +885,7 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 								</div>
 								<div className="list-actions">
 									<button type="button" onClick={() => toggleDone(item.id)}>
-										Done
+										{item.done ? 'Undo' : 'Done'}
 									</button>
 									<button
 										type="button"
@@ -1087,27 +901,6 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 							<li className="empty">No plans yet. Add your first schedule.</li>
 						) : null}
 					</ul>
-
-					<div className="schedule-history-block">
-						<h3>Schedule History</h3>
-						<ul className="schedule-history-list">
-							{scheduleHistory.map((item) => (
-								<li key={`${item.id}-${item.completedAt}`}>
-									<p>{item.title}</p>
-									<small>
-										{item.date} · {item.time}
-										{item.note ? ` · ${item.note}` : ''}
-									</small>
-									<small className="history-completed-at">
-										Completed: {item.completedAt}
-									</small>
-								</li>
-							))}
-							{scheduleHistory.length === 0 ? (
-								<li className="empty">No completed schedules yet.</li>
-							) : null}
-						</ul>
-					</div>
 				</div>
 
 				<div className="panel memory-panel">
@@ -1318,3 +1111,5 @@ function App({ sessionEmail, onOpenProfile }: AppProps) {
 }
 
 export default App
+
+					

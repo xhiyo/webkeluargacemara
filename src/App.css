@@ -80,65 +80,6 @@
   animation: drift 14s ease-in-out infinite reverse;
 }
 
-.hero-profile-entry {
-  position: absolute;
-  top: 0.9rem;
-  right: 0.9rem;
-  z-index: 3;
-  width: 122px;
-  height: 122px;
-  border-radius: 50%;
-  border: 3px solid rgba(214, 255, 210, 0.62);
-  background: radial-gradient(circle at 30% 30%, rgba(212, 255, 201, 0.86), rgba(20, 86, 49, 0.95));
-  color: #f0ffee;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  padding: 0.55rem;
-  cursor: pointer;
-  box-shadow: 0 16px 28px rgba(6, 38, 21, 0.35);
-  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
-}
-
-.hero-profile-entry::before {
-  content: '';
-  position: absolute;
-  inset: -8px;
-  border-radius: 50%;
-  border: 1px solid rgba(228, 255, 223, 0.28);
-  pointer-events: none;
-}
-
-.hero-profile-entry:hover {
-  transform: translateY(-3px) scale(1.03);
-  border-color: rgba(236, 255, 231, 0.92);
-  box-shadow: 0 20px 34px rgba(6, 38, 21, 0.45);
-}
-
-.hero-profile-initial {
-  font-size: 2.25rem;
-  font-weight: 800;
-  line-height: 1;
-  text-shadow: 0 2px 8px rgba(10, 41, 23, 0.32);
-}
-
-.hero-profile-text {
-  max-width: 92px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.73rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: lowercase;
-  border-radius: 999px;
-  padding: 0.14rem 0.44rem;
-  background: rgba(10, 44, 24, 0.34);
-  border: 1px solid rgba(217, 255, 208, 0.36);
-}
-
 .hero-tag {
   margin: 0;
   font-size: 0.85rem;
@@ -1183,22 +1124,6 @@ button:hover {
 }
 
 @media (max-width: 560px) {
-  .hero-profile-entry {
-    width: 96px;
-    height: 96px;
-    top: 0.8rem;
-    right: 0.8rem;
-  }
-
-  .hero-profile-initial {
-    font-size: 1.75rem;
-  }
-
-  .hero-profile-text {
-    max-width: 74px;
-    font-size: 0.62rem;
-  }
-
   .circle-app {
     width: min(100% - 1rem, 1100px);
     margin: 1.2rem auto 2rem;
