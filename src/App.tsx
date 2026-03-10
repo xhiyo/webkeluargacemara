@@ -123,6 +123,7 @@ function App() {
 	const [appView, setAppView] = useState<'home' | 'password'>('home')
 	const [memoryCount, setMemoryCount] = useState(0)
 	const [scheduleCount, setScheduleCount] = useState(0)
+	const [onlineCount, setOnlineCount] = useState(0)
 	const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 	const [memberEmail, setMemberEmail] = useState<string | null>(null)
 	const coverPhotoTitle = 'Ulang Tahun Candice'
@@ -459,6 +460,7 @@ function App() {
 				<div className="hero-row">
 					<span className="hero-date">Today: {todayLabel}</span>
 					<span className="hero-people">6 friends connected</span>
+					<span className="hero-people">Online now: {onlineCount}</span>
 					{memberEmail ? <span className="hero-people">Signed in: {memberEmail}</span> : null}
 				</div>
 				<div className="hero-stats">
@@ -516,7 +518,11 @@ function App() {
 				/>
 			</section>
 
-			<GlobalChat onNotice={setDbNotice} currentUserEmail={memberEmail} />
+			<GlobalChat
+				onNotice={setDbNotice}
+				currentUserEmail={memberEmail}
+				onOnlineCountChange={setOnlineCount}
+			/>
 			<Footer />
 
 			{activeHeroPhoto ? (

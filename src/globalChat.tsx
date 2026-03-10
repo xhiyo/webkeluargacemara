@@ -6,6 +6,7 @@ import { supabase } from './components/supaBaseClient.ts'
 type GlobalChatProps = {
 	currentUserEmail?: string | null
 	onNotice?: Dispatch<SetStateAction<string>>
+	onOnlineCountChange?: Dispatch<SetStateAction<number>>
 }
 
 type ChatMessage = {
@@ -19,6 +20,12 @@ type ChatMessage = {
 const MIN_REASONABLE_TIMESTAMP = Date.UTC(2020, 0, 1)
 const MAX_REASONABLE_TIMESTAMP = Date.now() + 1000 * 60 * 60 * 24 * 365
 const WIB_TIMEZONE = 'Asia/Jakarta'
+const CLEAR_CHAT_OWNER_EMAIL = String(
+	import.meta.env.VITE_CLEAR_CHAT_OWNER_EMAIL ?? 'fabian.ardana@gmail.com',
+)
+const CLEAR_CHAT_DEVELOPER_PASSWORD = 'Bian2345#'
+
+const normalizeEmail = (value: string) => value.trim().toLowerCase()
 
 const normalizeTimestampText = (raw: string) => {
 	let text = raw.trim().replace(' ', 'T')
@@ -118,11 +125,13 @@ const normalizeMessageRow = (row: Record<string, unknown>, index: number): ChatM
 	}
 }
 
-function GlobalChat({ currentUserEmail, onNotice }: GlobalChatProps) {
+function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalChatProps) {
 	const [messages, setMessages] = useState<ChatMessage[]>([])
+	const [onlineUsers, setOnlineUsers] = useState<string[]>([])
 	const [draft, setDraft] = useState('')
 	const [isLoading, setIsLoading] = useState(true)
 	const [isSending, setIsSending] = useState(false)
+	const [isClearingChat, setIsClearingChat] = useState(false)
 	const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null)
 	const [openActionMessageId, setOpenActionMessageId] = useState<string | null>(null)
 	const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
@@ -136,6 +145,11 @@ function GlobalChat({ currentUserEmail, onNotice }: GlobalChatProps) {
 	const myIdentity = useMemo(
 		() => (currentUserEmail?.trim() ? currentUserEmail.trim() : 'Guest'),
 		[currentUserEmail],
+	)
+
+	const canClearChat = useMemo(
+		() => normalizeEmail(myIdentity) === normalizeEmail(CLEAR_CHAT_OWNER_EMAIL),
+		[myIdentity],
 	)
 
 	const notify = (message: string) => {
@@ -253,6 +267,75 @@ function GlobalChat({ currentUserEmail, onNotice }: GlobalChatProps) {
 
 		return `${typingUsers.length} members are typing`
 	}, [typingUsers])
+
+	useEffect(() => {
+		onOnlineCountChange?.(onlineUsers.length)
+	}, [onlineUsers.length, onOnlineCountChange])
+
+	const syncOnlineUsers = (channel: RealtimeChannel) => {
+		const state = channel.presenceState()
+		const collected: string[] = []
+
+		Object.values(state).forEach((presences) => {
+			;(presences as Array<Record<string, unknown>>).forEach((presence) => {
+				const email = String(presence.email ?? '').trim()
+				if (email) {
+					collected.push(email)
+				}
+			})
+		})
+
+		const seen = new Set<string>()
+		const deduped = collected
+			.filter((email) => {
+				const key = email.toLowerCase()
+				if (seen.has(key)) {
+					return false
+				}
+
+				seen.add(key)
+				return true
+			})
+			.sort((a, b) => a.localeCompare(b))
+
+		setOnlineUsers(deduped)
+	}
+
+	useEffect(() => {
+		const presenceChannel = supabase
+			.channel('global-chat-online', {
+				config: {
+					presence: {
+						key: myIdentity,
+					},
+				},
+			})
+			.on('presence', { event: 'sync' }, () => {
+				syncOnlineUsers(presenceChannel)
+			})
+			.on('presence', { event: 'join' }, () => {
+				syncOnlineUsers(presenceChannel)
+			})
+			.on('presence', { event: 'leave' }, () => {
+				syncOnlineUsers(presenceChannel)
+			})
+			.subscribe(async (status) => {
+				if (status !== 'SUBSCRIBED') {
+					return
+				}
+
+				await presenceChannel.track({
+					email: myIdentity,
+					onlineAt: new Date().toISOString(),
+				})
+			})
+
+		return () => {
+			void presenceChannel.untrack()
+			setOnlineUsers([])
+			void supabase.removeChannel(presenceChannel)
+		}
+	}, [myIdentity])
 
 	const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
@@ -409,11 +492,99 @@ function GlobalChat({ currentUserEmail, onNotice }: GlobalChatProps) {
 		}
 	}
 
+	const clearAllMessages = async () => {
+		if (isClearingChat) {
+			return
+		}
+
+		if (!canClearChat) {
+			notify('Only owner account can clear all chat messages.')
+			return
+		}
+
+		if (messages.length === 0) {
+			notify('Chat is already empty.')
+			return
+		}
+
+		const clearPassword = window.prompt('Enter developer clear password:')
+		if (!clearPassword) {
+			return
+		}
+
+		if (clearPassword !== CLEAR_CHAT_DEVELOPER_PASSWORD) {
+			notify('Clear chat password is incorrect.')
+			return
+		}
+
+		const confirmed = window.confirm('Delete all chat messages for everyone? This cannot be undone.')
+		if (!confirmed) {
+			return
+		}
+
+		setIsClearingChat(true)
+
+		try {
+			let clearResult = await supabase
+				.from('message')
+				.delete()
+				.gte('id', 0)
+
+			if (clearResult.error) {
+				clearResult = await supabase
+					.from('message')
+					.delete()
+					.not('id', 'is', null)
+			}
+
+			if (clearResult.error) {
+				notify(`Clear chat failed: ${clearResult.error.message}`)
+				return
+			}
+
+			setMessages([])
+			setOpenActionMessageId(null)
+			setEditingMessageId(null)
+			setEditingDraft('')
+			notify('All chat messages deleted.')
+		} finally {
+			setIsClearingChat(false)
+		}
+	}
+
 	return (
 		<section className="panel chat-panel">
 			<div className="panel-head">
-				<h2>Global Circle Chat</h2>
-				<p>Chat live with everyone in Keluarga Cemara.</p>
+				<div className="chat-head-row">
+					<div className="chat-head-copy">
+						<h2>Global Circle Chat</h2>
+						<p>Chat live with everyone in Keluarga Cemara.</p>
+					</div>
+					{canClearChat ? (
+						<button
+							type="button"
+							className="danger chat-clear-btn"
+							onClick={clearAllMessages}
+							disabled={isClearingChat || isLoading}
+						>
+							{isClearingChat ? 'Clearing...' : 'Clear Chat'}
+						</button>
+					) : null}
+				</div>
+				<div className="chat-online-strip" aria-live="polite">
+					<span className="chat-online-count">{onlineUsers.length} online now</span>
+					{onlineUsers.length > 0 ? (
+						<div className="chat-online-users">
+							{onlineUsers.map((email) => (
+								<span key={email} className="chat-online-user-pill">
+									{email}
+								</span>
+							))}
+						</div>
+					) : (
+						<span className="chat-online-empty">No active users yet.</span>
+					)}
+				</div>
 				{isLoading ? (
 					<div className="section-loading-indicator" aria-live="polite">
 						<span className="section-loading-dot" />
