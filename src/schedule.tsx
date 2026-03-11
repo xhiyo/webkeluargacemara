@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react'
 import type { Dispatch, FormEvent, SetStateAction } from 'react'
 import { supabase } from './components/supaBaseClient.ts'
@@ -123,158 +124,60 @@ const mapScheduleItemToHistory = (item: ScheduleItem): ScheduleHistoryItem => ({
 
 function Schedule({ onCountChange, onNotice, currentUserEmail }: ScheduleProps) {
 	const [schedules, setSchedules] = useState<ScheduleItem[]>([])
-	const [totalActiveScheduleCount, setTotalActiveScheduleCount] = useState(0)
 	const [scheduleHistory, setScheduleHistory] = useState<ScheduleHistoryItem[]>([])
 	const [title, setTitle] = useState('')
 	const [date, setDate] = useState('')
 	const [time, setTime] = useState('')
 	const [note, setNote] = useState('')
 	const [isLoadingSchedule, setIsLoadingSchedule] = useState(true)
-	const [isLoadingMoreSchedules, setIsLoadingMoreSchedules] = useState(false)
 	const [isClearingHistory, setIsClearingHistory] = useState(false)
-	const [visibleScheduleCount, setVisibleScheduleCount] = useState(DEFAULT_VISIBLE_SCHEDULES)
-	const [rawScheduleCursor, setRawScheduleCursor] = useState(0)
-	const [hasMoreSchedules, setHasMoreSchedules] = useState(false)
+	const [showAllSchedules, setShowAllSchedules] = useState(false)
 
-	const visibleSchedules = schedules.slice(0, visibleScheduleCount)
+	const visibleSchedules = showAllSchedules
+		? schedules
+		: schedules.slice(0, DEFAULT_VISIBLE_SCHEDULES)
 
-	const hiddenSchedulesCount = Math.max(0, totalActiveScheduleCount - visibleScheduleCount)
+	const hiddenSchedulesCount = Math.max(0, schedules.length - DEFAULT_VISIBLE_SCHEDULES)
 
 	const canClearHistory = useMemo(
 		() => normalizeEmail(currentUserEmail ?? '') === normalizeEmail(CLEAR_HISTORY_OWNER_EMAIL),
 		[currentUserEmail],
 	)
 
-	const refreshActiveScheduleCount = async () => {
-		const { data, error } = await supabase
-			.from('schedule')
-			.select('scheduleId, scheduleHistory')
+	const refreshSchedules = async () => {
+		setIsLoadingSchedule(true)
 
-		if (error) {
-			onNotice?.(`Schedule count load failed: ${error.message}`)
-			return
-		}
-
-		const activeCount = ((data ?? []) as Array<{ scheduleHistory?: unknown }>)
-			.filter((row) => !isInScheduleHistory(row.scheduleHistory))
-			.length
-
-		setTotalActiveScheduleCount(activeCount)
-	}
-
-	const loadScheduleHistory = async () => {
 		const { data, error } = await supabase.from('schedule').select('*')
 
 		if (error) {
-			onNotice?.(`Schedule history load failed: ${error.message}`)
+			onNotice?.(`Schedule load failed: ${error.message}`)
+			setIsLoadingSchedule(false)
 			return
 		}
 
 		const rows = (data ?? []) as ScheduleRow[]
+		const active = rows
+			.filter((row) => !isInScheduleHistory(row.scheduleHistory))
+			.map(mapScheduleRowToItem)
+			.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
+
 		const history = rows
 			.filter((row) => isInScheduleHistory(row.scheduleHistory))
 			.map(mapScheduleRowToHistory)
 			.sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
 
+		setSchedules(active)
 		setScheduleHistory(history)
-	}
-
-	const loadActiveSchedulesChunk = async (reset: boolean) => {
-		if (reset) {
-			setIsLoadingSchedule(true)
-		} else {
-			setIsLoadingMoreSchedules(true)
-		}
-
-		const rawBatchSize = DEFAULT_VISIBLE_SCHEDULES * 3
-		let cursor = reset ? 0 : rawScheduleCursor
-		let reachedEnd = false
-		const collected: ScheduleItem[] = []
-
-		while (collected.length < DEFAULT_VISIBLE_SCHEDULES && !reachedEnd) {
-			const { data, error } = await supabase
-				.from('schedule')
-				.select('*')
-				.order('scheduleTime', { ascending: true })
-				.order('scheduleId', { ascending: true })
-				.range(cursor, cursor + rawBatchSize - 1)
-
-			if (error) {
-				onNotice?.(`Schedule load failed: ${error.message}`)
-				setIsLoadingSchedule(false)
-				setIsLoadingMoreSchedules(false)
-				return 0
-			}
-
-			const rows = (data ?? []) as ScheduleRow[]
-			if (rows.length === 0) {
-				reachedEnd = true
-				break
-			}
-
-			cursor += rows.length
-			if (rows.length < rawBatchSize) {
-				reachedEnd = true
-			}
-
-			const activeMapped = rows
-				.filter((row) => !isInScheduleHistory(row.scheduleHistory))
-				.map(mapScheduleRowToItem)
-
-			collected.push(...activeMapped)
-		}
-
-		setRawScheduleCursor(cursor)
-		setHasMoreSchedules(!reachedEnd)
-
-		if (reset) {
-			setSchedules(collected)
-			setVisibleScheduleCount(DEFAULT_VISIBLE_SCHEDULES)
-		} else {
-			setSchedules((prev) => {
-				const seen = new Set(prev.map((item) => item.id))
-				const dedupedCollected = collected.filter((item) => !seen.has(item.id))
-				return [...prev, ...dedupedCollected]
-			})
-		}
-
 		setIsLoadingSchedule(false)
-		setIsLoadingMoreSchedules(false)
-		return collected.length
 	}
 
 	useEffect(() => {
-		onCountChange?.(totalActiveScheduleCount)
-	}, [onCountChange, totalActiveScheduleCount])
+		onCountChange?.(schedules.length)
+	}, [onCountChange, schedules.length])
 
 	useEffect(() => {
-		const initScheduleData = async () => {
-			await Promise.all([refreshActiveScheduleCount(), loadScheduleHistory()])
-			await loadActiveSchedulesChunk(true)
-		}
-
-		void initScheduleData()
+		void refreshSchedules()
 	}, [])
-
-	const showMoreSchedules = async () => {
-		if (visibleScheduleCount < schedules.length) {
-			setVisibleScheduleCount((prev) =>
-				Math.min(prev + DEFAULT_VISIBLE_SCHEDULES, schedules.length),
-			)
-			return
-		}
-
-		if (!hasMoreSchedules || isLoadingMoreSchedules) {
-			return
-		}
-
-		const loadedCount = await loadActiveSchedulesChunk(false)
-		if (loadedCount > 0) {
-			setVisibleScheduleCount((prev) =>
-				Math.min(prev + DEFAULT_VISIBLE_SCHEDULES, totalActiveScheduleCount),
-			)
-		}
-	}
 
 	const clearScheduleHistory = async () => {
 		if (isClearingHistory) {
@@ -368,8 +271,7 @@ function Schedule({ onCountChange, onNotice, currentUserEmail }: ScheduleProps) 
 				return
 			}
 
-			await Promise.all([refreshActiveScheduleCount(), loadScheduleHistory()])
-			await loadActiveSchedulesChunk(true)
+			await refreshSchedules()
 			onNotice?.(`Schedule history cleared (${deletedCount} item${deletedCount > 1 ? 's' : ''}).`)
 		} finally {
 			setIsClearingHistory(false)
@@ -457,8 +359,6 @@ function Schedule({ onCountChange, onNotice, currentUserEmail }: ScheduleProps) 
 			},
 			...prev,
 		])
-		setTotalActiveScheduleCount((prev) => prev + 1)
-		setVisibleScheduleCount((prev) => prev + 1)
 		onNotice?.('Schedule added Database.')
 		setTitle('')
 		setDate('')
@@ -595,8 +495,6 @@ function Schedule({ onCountChange, onNotice, currentUserEmail }: ScheduleProps) 
 		}
 
 		setSchedules((prev) => prev.filter((item) => item.id !== id))
-		setTotalActiveScheduleCount((prev) => Math.max(0, prev - 1))
-		setVisibleScheduleCount((prev) => Math.max(DEFAULT_VISIBLE_SCHEDULES, prev - 1))
 		setScheduleHistory((prev) => [mapScheduleItemToHistory(target), ...prev])
 		onNotice?.('Schedule moved to history.')
 	}
@@ -619,8 +517,6 @@ function Schedule({ onCountChange, onNotice, currentUserEmail }: ScheduleProps) 
 		}
 
 		setSchedules((prev) => prev.filter((item) => item.id !== id))
-		setTotalActiveScheduleCount((prev) => Math.max(0, prev - 1))
-		setVisibleScheduleCount((prev) => Math.max(DEFAULT_VISIBLE_SCHEDULES, prev - 1))
 	}
 
 	return (
@@ -729,29 +625,17 @@ function Schedule({ onCountChange, onNotice, currentUserEmail }: ScheduleProps) 
 				) : null}
 			</ul>
 
-			{!isLoadingSchedule && totalActiveScheduleCount > DEFAULT_VISIBLE_SCHEDULES ? (
+			{!isLoadingSchedule && schedules.length > DEFAULT_VISIBLE_SCHEDULES ? (
 				<div className="schedule-toggle-row">
-					{hiddenSchedulesCount > 0 ? (
-						<button
-							type="button"
-							className="secondary schedule-toggle-btn"
-							onClick={() => void showMoreSchedules()}
-							disabled={isLoadingMoreSchedules}
-						>
-							{isLoadingMoreSchedules
-								? 'Loading more...'
-								: `Show ${Math.min(DEFAULT_VISIBLE_SCHEDULES, hiddenSchedulesCount)} more schedule${Math.min(DEFAULT_VISIBLE_SCHEDULES, hiddenSchedulesCount) > 1 ? 's' : ''}`}
-						</button>
-					) : null}
-					{visibleScheduleCount > DEFAULT_VISIBLE_SCHEDULES ? (
-						<button
-							type="button"
-							className="secondary schedule-toggle-btn"
-							onClick={() => setVisibleScheduleCount(DEFAULT_VISIBLE_SCHEDULES)}
-						>
-							Show less schedules
-						</button>
-					) : null}
+					<button
+						type="button"
+						className="secondary schedule-toggle-btn"
+						onClick={() => setShowAllSchedules((prev) => !prev)}
+					>
+						{showAllSchedules
+							? 'Show less schedules'
+							: `Show ${hiddenSchedulesCount} more schedule${hiddenSchedulesCount > 1 ? 's' : ''}`}
+					</button>
 				</div>
 			) : null}
 

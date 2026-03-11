@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from 'react'
+import { useEffect, useState } from 'react'
+import type { ChangeEvent, Dispatch, SetStateAction } from 'react'
 import { supabase } from './components/supaBaseClient.ts'
 
 type MemoryPhoto = {
@@ -20,26 +20,8 @@ type MemoryRow = {
 	memoryAddedBy?: string | null
 }
 
-type MemoryCommentRow = {
-	id?: string | number | null
-	commentId?: string | number | null
-	memoryId?: string | number | null
-	comment?: string | null
-	commentText?: string | null
-	addedBy?: string | null
-	commentBy?: string | null
-	timestamp?: string | null
-	createdAt?: string | null
-}
 
-type MemoryComment = {
-	id: string
-	memoryId: string
-	text: string
-	commentBy: string
-	createdAtMs: number
-	timeLabel: string
-}
+
 
 type SmartImageProps = {
 	src: string
@@ -50,14 +32,13 @@ type SmartImageProps = {
 
 type MemoriesPhotosProps = {
 	onCountChange?: Dispatch<SetStateAction<number>>
-	onNotice?: Dispatch<SetStateAction<string>>
 	currentUserEmail?: string | null
 }
 
 const MAX_FILES_PER_UPLOAD = 8
 const MAX_SINGLE_FILE_SIZE_BYTES = 5 * 1024 * 1024
 const DEFAULT_VISIBLE_MEMORIES = 4
-const MAX_MEMORY_COMMENT_LENGTH = 220
+// ...existing code...
 
 const formatFileSize = (bytes: number) => {
 	if (!Number.isFinite(bytes) || bytes < 0) {
@@ -103,34 +84,6 @@ const getDataUrlBytes = (src: string) => {
 
 const loadedImageSrcCache = new Set<string>()
 
-const formatCommentTime = (timestamp: number) =>
-	new Intl.DateTimeFormat('id-ID', {
-		hour: '2-digit',
-		minute: '2-digit',
-		day: '2-digit',
-		month: 'short',
-		timeZone: 'Asia/Jakarta',
-		hour12: false,
-	}).format(new Date(timestamp))
-
-const mapCommentRow = (row: MemoryCommentRow, index: number): MemoryComment => {
-	const memoryId = String(row.memoryId ?? row.id ?? '')
-	const baseId = (row.id ?? memoryId) || 'comment'
-	const commentId =
-		row.commentId ??
-		`${String(baseId)}-${String(row.timestamp ?? row.createdAt ?? index)}`
-	const createdAtMs = Date.parse(String(row.timestamp ?? row.createdAt ?? ''))
-	const safeCreatedAt = Number.isNaN(createdAtMs) ? Date.now() : createdAtMs
-
-	return {
-		id: String(commentId),
-		memoryId,
-		text: String(row.comment ?? row.commentText ?? '').trim(),
-		commentBy: String(row.addedBy ?? row.commentBy ?? 'Guest').trim() || 'Guest',
-		createdAtMs: safeCreatedAt,
-		timeLabel: formatCommentTime(safeCreatedAt),
-	}
-}
 
 const mapMemoryRowToPhoto = (row: MemoryRow, index: number): MemoryPhoto => {
 	const memoryId = String(row.memoryId ?? `m-${index}`)
@@ -205,7 +158,7 @@ const SmartImage = ({ src, alt, fallbackSrc, className }: SmartImageProps) => {
 	)
 }
 
-function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesPhotosProps) {
+function MemoriesPhotos({ onCountChange, currentUserEmail }: MemoriesPhotosProps) {
 	const [memories, setMemories] = useState<MemoryPhoto[]>([])
 	const [totalMemoryCount, setTotalMemoryCount] = useState(0)
 	const [caption, setCaption] = useState('')
@@ -216,11 +169,7 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 	const [editingCaption, setEditingCaption] = useState('')
 	const [activeMemoryPhoto, setActiveMemoryPhoto] = useState<MemoryPhoto | null>(null)
 	const [selectedUploadInfo, setSelectedUploadInfo] = useState<string[]>([])
-	const [commentsByMemoryId, setCommentsByMemoryId] = useState<Record<string, MemoryComment[]>>({})
-	const [commentDraftByMemoryId, setCommentDraftByMemoryId] = useState<Record<string, string>>({})
-	const [sendingCommentMemoryId, setSendingCommentMemoryId] = useState<string | null>(null)
-	const [isCommentTableAvailable, setIsCommentTableAvailable] = useState(true)
-	const hasShownCommentTableNoticeRef = useRef(false)
+	 // ...existing code...
 	const VIEWED_MEM_KEY = 'viewedMemoryIds'
 	const [viewedMemoryIds, setViewedMemoryIds] = useState<string[]>(() => {
 		try {
@@ -237,111 +186,7 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 		} catch {}
 	}, [viewedMemoryIds])
 
-	const notify = (message: string) => {
-		onNotice?.(message)
-	}
-
-	const markCommentTableUnavailable = (sourceMessage: string) => {
-		setIsCommentTableAvailable(false)
-
-		if (!hasShownCommentTableNoticeRef.current) {
-			notify(`${sourceMessage}. Ensure table 'memoryComment' has memoryId, comment, addedBy, timestamp.`)
-			hasShownCommentTableNoticeRef.current = true
-		}
-	}
-
-	const isMissingCommentTableError = (message: string) => {
-		const normalized = message.toLowerCase()
-		return (
-			normalized.includes('memorycomment') &&
-			(normalized.includes('does not exist') ||
-				normalized.includes('relation') ||
-				normalized.includes('schema cache'))
-		)
-	}
-
-	const isMissingCommentColumnError = (message: string) => {
-		const normalized = message.toLowerCase()
-		return (
-			normalized.includes('column') &&
-			(normalized.includes('memoryid') ||
-				normalized.includes('comment') ||
-				normalized.includes('addedby') ||
-				normalized.includes('timestamp'))
-		)
-	}
-
-	const loadCommentsForVisibleMemories = async () => {
-		if (!isCommentTableAvailable) {
-			return
-		}
-
-		const visibleIds = memories.map((photo) => photo.memoryId)
-		if (visibleIds.length === 0) {
-			setCommentsByMemoryId({})
-			return
-		}
-
-		const queryIds = visibleIds.map((id) => {
-			const asNumber = Number(id)
-			return Number.isNaN(asNumber) ? id : asNumber
-		})
-
-		let { data, error } = await supabase
-			.from('memoryComment')
-			.select('*')
-			.in('memoryId', queryIds)
-			.order('timestamp', { ascending: true })
-
-		if (error && isMissingCommentColumnError(error.message)) {
-			const fallback = await supabase
-				.from('memoryComment')
-				.select('*')
-				.order('timestamp', { ascending: true })
-
-			data = fallback.data
-			error = fallback.error
-		}
-
-		if (error) {
-			if (isMissingCommentTableError(error.message)) {
-				markCommentTableUnavailable('Comments are not available yet')
-				return
-			}
-
-			if (isMissingCommentColumnError(error.message)) {
-				markCommentTableUnavailable('Comments schema mismatch')
-				return
-			}
-
-			notify(`Load comments failed: ${error.message}`)
-			return
-		}
-
-		const grouped: Record<string, MemoryComment[]> = {}
-		visibleIds.forEach((id) => {
-			grouped[id] = []
-		})
-
-		;((data ?? []) as MemoryCommentRow[]).forEach((row, index) => {
-			const mapped = mapCommentRow(row, index)
-			if (!mapped.memoryId) {
-				return
-			}
-
-			if (!visibleIds.includes(mapped.memoryId)) {
-				return
-			}
-
-			if (!grouped[mapped.memoryId]) {
-				grouped[mapped.memoryId] = []
-			}
-
-			grouped[mapped.memoryId].push(mapped)
-		})
-
-		setCommentsByMemoryId(grouped)
-	}
+	// Removed comment-related functions and logic
 
 	const hiddenMemoriesCount = Math.max(0, totalMemoryCount - memories.length)
 
@@ -370,16 +215,16 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 				.select('memoryId', { count: 'exact', head: true }),
 		])
 
-		if (countError) {
-			notify(`Memory count load failed: ${countError.message}`)
-		}
+		 if (countError) {
+			 // Optionally handle error
+		 }
 
-		if (error) {
-			notify(`Memory load failed: ${error.message}`)
-			setIsLoadingMemories(false)
-			setIsLoadingMoreMemories(false)
-			return
-		}
+		 if (error) {
+			 // Optionally handle error
+			 setIsLoadingMemories(false)
+			 setIsLoadingMoreMemories(false)
+			 return
+		 }
 
 		setTotalMemoryCount(count ?? 0)
 
@@ -402,9 +247,7 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 		void loadMemories(true)
 	}, [])
 
-	useEffect(() => {
-		void loadCommentsForVisibleMemories()
-	}, [memories, isCommentTableAvailable])
+	// Removed comment-related useEffect
 
 	useEffect(() => {
 		const refreshMemories = async () => {
@@ -427,127 +270,9 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 		}
 	}, [])
 
-	useEffect(() => {
-		if (!isCommentTableAvailable) {
-			return
-		}
+	 // ...existing code...
 
-		const commentChannel = supabase
-			.channel('memory-comment-realtime-sync')
-			.on(
-				'postgres_changes',
-				{ event: '*', schema: 'public', table: 'memoryComment' },
-				() => {
-					void loadCommentsForVisibleMemories()
-				},
-			)
-			.subscribe()
-
-		return () => {
-			void supabase.removeChannel(commentChannel)
-		}
-	}, [isCommentTableAvailable, memories])
-
-	const submitComment = async (event: FormEvent<HTMLFormElement>, memoryId: string) => {
-		event.preventDefault()
-
-		if (sendingCommentMemoryId === memoryId) {
-			return
-		}
-
-		const draft = (commentDraftByMemoryId[memoryId] ?? '').trim()
-		if (!draft) {
-			return
-		}
-
-		if (draft.length > MAX_MEMORY_COMMENT_LENGTH) {
-			notify(`Comment too long. Max ${MAX_MEMORY_COMMENT_LENGTH} characters.`)
-			return
-		}
-
-		setSendingCommentMemoryId(memoryId)
-
-		const writer = currentUserEmail?.trim() || 'Guest'
-		const memoryIdNumeric = Number(memoryId)
-		const payload = {
-			memoryId: Number.isNaN(memoryIdNumeric) ? memoryId : memoryIdNumeric,
-			comment: draft,
-			addedBy: writer,
-			timestamp: new Date().toISOString(),
-		}
-
-		// Optimistically update UI
-		setCommentsByMemoryId((prev) => {
-			const newComment: MemoryComment = {
-				id: `optimistic-${Date.now()}`,
-				memoryId: String(payload.memoryId),
-				text: payload.comment,
-				commentBy: writer,
-				createdAtMs: Date.now(),
-				timeLabel: formatCommentTime(Date.now()),
-			}
-			return {
-				...prev,
-				[memoryId]: [...(prev[memoryId] ?? []), newComment].slice(-10),
-			}
-		})
-
-		setCommentDraftByMemoryId((prev) => ({
-			...prev,
-			[memoryId]: '',
-		}))
-
-		// Insert in background
-		void (async () => {
-			let inserted = await supabase
-				.from('memoryComment')
-				.insert([payload])
-				.select('*')
-
-			if (inserted.error) {
-				if (isMissingCommentColumnError(inserted.error.message)) {
-					inserted = await supabase
-						.from('memoryComment')
-						.insert([
-							{
-								memoryId: payload.memoryId,
-								comment: payload.comment,
-								addedBy: payload.addedBy,
-								timestamp: payload.timestamp,
-							},
-						])
-						.select('*')
-				} else {
-					inserted = await supabase
-						.from('memoryComment')
-						.insert([
-							{
-								memoryId: payload.memoryId,
-								comment: payload.comment,
-								addedBy: payload.addedBy,
-							},
-						])
-						.select('*')
-				}
-			}
-
-			if (inserted.error) {
-				if (isMissingCommentTableError(inserted.error.message)) {
-					markCommentTableUnavailable('Comments are not available yet')
-				} else if (isMissingCommentColumnError(inserted.error.message)) {
-					markCommentTableUnavailable('Comments schema mismatch')
-				} else {
-					notify(`Post comment failed: ${inserted.error.message}`)
-				}
-				setSendingCommentMemoryId(null)
-				return
-			}
-
-			// Replace optimistic comment with real one
-			await loadCommentsForVisibleMemories()
-			setSendingCommentMemoryId(null)
-		})()
-	}
+	// Removed submitComment function
 
 	const handlePhotoUpload = async (event: ChangeEvent<HTMLInputElement>) => {
 		const files = event.target.files
@@ -565,22 +290,16 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 			return
 		}
 
-		if (imageFiles.length > MAX_FILES_PER_UPLOAD) {
-			notify(`Max ${MAX_FILES_PER_UPLOAD} images per upload to keep app stable.`)
-			event.target.value = ''
-			return
-		}
+		 if (imageFiles.length > MAX_FILES_PER_UPLOAD) {
+			 event.target.value = ''
+			 return
+		 }
 
 		const tooLarge = imageFiles.filter((file) => file.size > MAX_SINGLE_FILE_SIZE_BYTES)
-		if (tooLarge.length > 0) {
-			notify(
-				`These files are too large (max ${formatFileSize(MAX_SINGLE_FILE_SIZE_BYTES)} each): ${tooLarge
-					.map((file) => file.name)
-					.join(', ')}`,
-			)
-			event.target.value = ''
-			return
-		}
+		 if (tooLarge.length > 0) {
+			 event.target.value = ''
+			 return
+		 }
 
 		setSelectedUploadInfo(
 			imageFiles.map((file) => `${file.name} (${formatFileSize(file.size)})`),
@@ -614,11 +333,10 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 			error = fallbackInsert.error
 		}
 
-		if (error) {
-			notify(`Create memory failed: ${error.message}`)
-			event.target.value = ''
-			return
-		}
+		 if (error) {
+			 event.target.value = ''
+			 return
+		 }
 
 		const uploaderEmail = currentUserEmail?.trim() || 'Guest'
 		const insertedMemories = ((data ?? []) as MemoryRow[]).map((row, index) => {
@@ -639,9 +357,7 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 		})
 		setTotalMemoryCount((prev) => prev + insertedMemories.length)
 		setCaption('')
-		notify(
-			`Memory photo saved to Database (${imageFiles.length} file${imageFiles.length > 1 ? 's' : ''}).`,
-		)
+		 // ...existing code...
 
 		event.target.value = ''
 	}
@@ -702,12 +418,10 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 						.single()
 				: replacementInsert
 
-			if (safeReplacementInsert.error || !safeReplacementInsert.data) {
-				notify(
-					`Edit memory failed: ${safeReplacementInsert.error?.message || 'Insert replacement failed.'}`,
-				)
-				return
-			}
+			 if (safeReplacementInsert.error || !safeReplacementInsert.data) {
+				 // Optionally handle error
+				 return
+			 }
 
 			const replacementRaw = safeReplacementInsert.data as MemoryRow
 			const replacementPhoto = mapMemoryRowToPhoto(replacementRaw, 0)
@@ -736,11 +450,9 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 					.eq('memoryPhotosUrl', target.src)
 					.select('memoryId')
 
-				if (fallbackDeleteOld.error || (fallbackDeleteOld.data ?? []).length === 0) {
-					notify(
-						'Title changed, but old memory row could not be removed. Please delete the duplicate old row manually.',
-					)
-				}
+				 if (fallbackDeleteOld.error || (fallbackDeleteOld.data ?? []).length === 0) {
+					 // Optionally handle error
+				 }
 			}
 
 			setMemories((prev) =>
@@ -758,7 +470,7 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 				return replacementWithOwner
 			})
 
-			notify('Memory title updated Database.')
+			 // ...existing code...
 
 			cancelEditMemory()
 		} finally {
@@ -773,15 +485,11 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 			return
 		}
 
-		let deleteError = '';
+		 // ...existing code...
 		let deletedCommitted = false;
 		const numericId = Number(target.memoryId);
 
-		// Delete all related comments first
-		await supabase
-			.from('memoryComment')
-			.delete()
-			.eq('memoryId', target.memoryId);
+		 // ...existing code...
 
 		// Now delete the memory row
 		const primaryDelete = Number.isNaN(numericId)
@@ -797,51 +505,35 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 				.select('memoryId');
 
 		if (primaryDelete.error) {
-			deleteError = primaryDelete.error.message;
+			// Optionally handle error
 		} else if ((primaryDelete.data ?? []).length > 0) {
 			deletedCommitted = true;
 		}
 
-		if (!deletedCommitted) {
-			const fallbackDelete = await supabase
-				.from('memory')
-				.delete()
-				.eq('memoryName', target.caption)
-				.eq('memoryPhotosUrl', target.src)
-				.select('memoryId');
+		 if (!deletedCommitted) {
+			 const fallbackDelete = await supabase
+				 .from('memory')
+				 .delete()
+				 .eq('memoryName', target.caption)
+				 .eq('memoryPhotosUrl', target.src)
+				 .select('memoryId');
+			 if (fallbackDelete.error) {
+				 // Optionally handle error
+				 return;
+			 }
+			 if ((fallbackDelete.data ?? []).length > 0) {
+				 deletedCommitted = true;
+			 }
+		 }
 
-			if (fallbackDelete.error) {
-				notify(
-					`Delete memory failed: ${deleteError} | fallback: ${fallbackDelete.error.message}`,
-				);
-				return;
-			}
+		 if (!deletedCommitted) {
+			 // Optionally handle error
+			 return;
+		 }
 
-			if ((fallbackDelete.data ?? []).length > 0) {
-				deletedCommitted = true;
-			}
-		}
-
-		if (!deletedCommitted) {
-			notify(
-				'Delete was not committed in Database. Check RLS DELETE policy for table memoryId.',
-			);
-			return;
-		}
-
-		setMemories((prev) => prev.filter((photo) => photo.id !== id))
-		setCommentsByMemoryId((prev) => {
-			const next = { ...prev }
-			delete next[target.memoryId]
-			return next
-		})
-		setCommentDraftByMemoryId((prev) => {
-			const next = { ...prev }
-			delete next[target.memoryId]
-			return next
-		})
-		setTotalMemoryCount((prev) => Math.max(0, prev - 1))
-		notify('Memory deleted from Database.')
+		 setMemories((prev) => prev.filter((photo) => photo.id !== id))
+		 setTotalMemoryCount((prev) => Math.max(0, prev - 1))
+		 // ...existing code...
 
 		if (editingMemoryId === id) {
 			cancelEditMemory()
@@ -968,16 +660,8 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 													setViewedMemoryIds((prev) => prev.includes(photo.memoryId) ? prev : [...prev, photo.memoryId]);
 												}}
 											>
-												<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-													<path d="M4 4H20V18H5.17L4 19.17V4Z" stroke="#2e7d32" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-													<circle cx="10" cy="6" r="2" fill="#2e7d32"/>
-												</svg>
-												{/* Notification badge */}
-												{commentsByMemoryId[photo.memoryId]?.length > 0 && !viewedMemoryIds.includes(photo.memoryId) && (
-													<span style={{ position: 'absolute', right: -4, top: -8, background: '#f44336', color: 'white', borderRadius: '20%', width: 20, height: 20, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
-														{commentsByMemoryId[photo.memoryId].length}
-													</span>
-												)}
+												
+					
 											</button>
 											<p style={{ marginRight: 28 }}>{photo.caption}</p>
 										</div>
@@ -995,7 +679,7 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 													color: '#fff',
 													fontSize: '0.88em',
 													fontWeight: 600,
-													padding: '3px 10px',
+													padding: '2px 10px',
 													borderRadius: '10px',
 													cursor: 'pointer',
 													minWidth: '40px',
@@ -1016,7 +700,7 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 													fontSize: '0.75em',
 													fontWeight: 600,
 													padding: '2px 8px',
-													borderRadius: '8px',
+													borderRadius: '10px',
 													cursor: 'pointer',
 													minWidth: '40px',
 													boxShadow: '0 2px 8px rgba(46,125,50,0.13)',
@@ -1110,55 +794,7 @@ function MemoriesPhotos({ onCountChange, onNotice, currentUserEmail }: MemoriesP
 							{activeMemoryPhoto.date ? ` · ${activeMemoryPhoto.date}` : ''}
 							{` · added by ${activeMemoryPhoto.addedBy}`}
 						</p>
-						{/* Comments overlay */}
-						<div className="memory-comments-overlay" style={{ width: '100%', marginTop: 8 }}>
-							<p className="memory-comments-title" style={{ fontWeight: 600, fontSize: '1em', marginBottom: 8, color: '#222' }}>Comments</p>
-							<ul className="memory-comment-list" style={{ maxHeight: 160, overflowY: 'auto', marginBottom: 8, padding: 0 }}>
-								{(commentsByMemoryId[activeMemoryPhoto.memoryId] ?? []).map((comment) => (
-									<li key={comment.id} style={{ display: 'flex', flexDirection: 'column', padding: '4px 0', borderBottom: '1px solid #eee', color: '#222' }}>
-										<div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-											<span style={{ flex: 1, textAlign: 'left', fontSize: '0.97em', color: '#222' }}>
-												<strong style={{ color: '#2e7d32' }}>{comment.commentBy}</strong>: {comment.text}
-											</span>
-										</div>
-										<small style={{ marginTop: 2, color: '#555', fontSize: '0.85em' }}>{comment.timeLabel}</small>
-									</li>
-								))}
-								{(commentsByMemoryId[activeMemoryPhoto.memoryId] ?? []).length === 0 ? (
-									<li className="memory-comment-empty" style={{ textAlign: 'center', color: '#888', padding: '8px 0' }}>No comments yet.</li>
-								) : null}
-							</ul>
-							<form
-								className="memory-comment-form"
-								style={{ display: 'flex', gap: 8 }}
-								onSubmit={(event) => void submitComment(event, activeMemoryPhoto.memoryId)}
-							>
-								<input
-									type="text"
-									placeholder="Write a comment..."
-									maxLength={MAX_MEMORY_COMMENT_LENGTH}
-									value={commentDraftByMemoryId[activeMemoryPhoto.memoryId] ?? ''}
-									onChange={(event) =>
-										setCommentDraftByMemoryId((prev) => ({
-											...prev,
-											[activeMemoryPhoto.memoryId]: event.target.value,
-										}))
-									}
-									disabled={(commentsByMemoryId[activeMemoryPhoto.memoryId]?.length ?? 0) >= 10}
-									style={{ flex: 1, borderRadius: 8, border: '1px solid #ccc', padding: '6px 10px', fontSize: '1em', color: '#222' }}
-								/>
-								<button
-									type="submit"
-									disabled={sendingCommentMemoryId === activeMemoryPhoto.memoryId || (commentsByMemoryId[activeMemoryPhoto.memoryId]?.length ?? 0) >= 10}
-									style={{ background: '#2e7d32', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 16px', fontWeight: 600, cursor: 'pointer' }}
-								>
-									{sendingCommentMemoryId === activeMemoryPhoto.memoryId ? 'Posting...' : 'Post'}
-								</button>
-							</form>
-							{(commentsByMemoryId[activeMemoryPhoto.memoryId]?.length ?? 0) >= 10 ? (
-								<small className="memory-comment-limit" style={{ color: '#f44336', fontWeight: 500, marginTop: 4 }}>Max 10 comments reached for this photo.</small>
-							) : null}
-						</div>
+						 // ...existing code...
 					</div>
 				</div>
 			) : null}
