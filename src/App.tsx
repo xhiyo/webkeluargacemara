@@ -515,10 +515,9 @@ function App() {
 				</div>
 				<div id="memory-section">
 					<MemoriesPhotos
-						onCountChange={setMemoryCount}
-						onNotice={setDbNotice}
-						currentUserEmail={memberEmail}
-					/>
+					 onCountChange={setMemoryCount}
+					 currentUserEmail={memberEmail}
+					 />
 				</div>
 			</section>
 
