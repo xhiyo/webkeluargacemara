@@ -140,6 +140,9 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 	const [editingDraft, setEditingDraft] = useState('')
 	const [savingEditMessageId, setSavingEditMessageId] = useState<string | null>(null)
 	const [typingUsers, setTypingUsers] = useState<string[]>([])
+	const [searchTerm, setSearchTerm] = useState('')
+	const [isAtBottom, setIsAtBottom] = useState(true)
+	const [unreadCount, setUnreadCount] = useState(0)
 	const listRef = useRef<HTMLUListElement | null>(null)
 	const typingChannelRef = useRef<RealtimeChannel | null>(null)
 	const presenceChannelRef = useRef<RealtimeChannel | null>(null)
@@ -147,6 +150,7 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 	const onlineIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const presenceRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 	const isPresenceOnlineRef = useRef(false)
+	const previousMessageCountRef = useRef(0)
 
 	const myIdentity = useMemo(
 		() => (currentUserEmail?.trim() ? currentUserEmail.trim() : 'Guest'),
@@ -240,8 +244,24 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 			return
 		}
 
-		listRef.current.scrollTop = listRef.current.scrollHeight
-	}, [messages.length])
+		const listNode = listRef.current
+		const syncAtBottom = () => {
+			const distanceToBottom = listNode.scrollHeight - listNode.scrollTop - listNode.clientHeight
+			const atBottom = distanceToBottom <= 16
+			setIsAtBottom(atBottom)
+
+			if (atBottom) {
+				setUnreadCount(0)
+			}
+		}
+
+		syncAtBottom()
+		listNode.addEventListener('scroll', syncAtBottom)
+
+		return () => {
+			listNode.removeEventListener('scroll', syncAtBottom)
+		}
+	}, [])
 
 	const sendTypingState = (isTyping: boolean) => {
 		if (!typingChannelRef.current) {
@@ -273,6 +293,51 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 
 		return `${typingUsers.length} members are typing`
 	}, [typingUsers])
+
+	const normalizedSearchTerm = useMemo(() => searchTerm.trim().toLowerCase(), [searchTerm])
+
+	const displayedMessages = useMemo(() => {
+		if (!normalizedSearchTerm) {
+			return messages
+		}
+
+		return messages.filter((message) => {
+			return message.text.toLowerCase().includes(normalizedSearchTerm)
+		})
+	}, [messages, normalizedSearchTerm])
+
+	useEffect(() => {
+		const previousCount = previousMessageCountRef.current
+		const nextCount = messages.length
+		const newlyAddedCount = Math.max(0, nextCount - previousCount)
+
+		if (isAtBottom && listRef.current) {
+			listRef.current.scrollTop = listRef.current.scrollHeight
+			setUnreadCount(0)
+		} else if (newlyAddedCount > 0) {
+			setUnreadCount((prev) => prev + newlyAddedCount)
+		}
+
+		previousMessageCountRef.current = nextCount
+	}, [messages.length, isAtBottom])
+
+	useEffect(() => {
+		if (!isAtBottom || !listRef.current) {
+			return
+		}
+
+		listRef.current.scrollTop = listRef.current.scrollHeight
+	}, [displayedMessages.length, isAtBottom])
+
+	const jumpToLatest = () => {
+		if (!listRef.current) {
+			return
+		}
+
+		listRef.current.scrollTop = listRef.current.scrollHeight
+		setIsAtBottom(true)
+		setUnreadCount(0)
+	}
 
 	useEffect(() => {
 		onOnlineCountChange?.(onlineUsers.length)
@@ -723,6 +788,33 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 						<span className="chat-online-empty">No active users yet.</span>
 					)}
 				</div>
+				<div className="chat-tools-row">
+					<label className="chat-search" htmlFor="chat-search-input">
+						<span className="chat-search-label">Search</span>
+						<input
+							id="chat-search-input"
+							type="search"
+							value={searchTerm}
+							onChange={(event) => setSearchTerm(event.target.value)}
+							placeholder="Search message text"
+							maxLength={80}
+						/>
+					</label>
+					{searchTerm ? (
+						<button
+							type="button"
+							className="secondary chat-clear-search-btn"
+							onClick={() => setSearchTerm('')}
+						>
+							Clear
+						</button>
+					) : null}
+				</div>
+				{normalizedSearchTerm ? (
+					<p className="chat-filter-result" aria-live="polite">
+						Showing {displayedMessages.length} of {messages.length} messages
+					</p>
+				) : null}
 				{isLoading ? (
 					<div className="section-loading-indicator" aria-live="polite">
 						<span className="section-loading-dot" />
@@ -732,7 +824,7 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 			</div>
 
 			<ul className="chat-list" ref={listRef}>
-				{messages.map((message) => {
+				{displayedMessages.map((message) => {
 					const isMine = message.sender.toLowerCase() === myIdentity.toLowerCase()
 					const isEditing = editingMessageId === message.id
 
@@ -814,7 +906,16 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 				{!isLoading && messages.length === 0 ? (
 					<li className="chat-empty">No messages yet. Say hello to the circle.</li>
 				) : null}
+				{!isLoading && messages.length > 0 && displayedMessages.length === 0 ? (
+					<li className="chat-empty">No messages match your search.</li>
+				) : null}
 			</ul>
+
+			{!isAtBottom ? (
+				<button type="button" className="chat-jump-btn" onClick={jumpToLatest}>
+					Jump to latest{unreadCount > 0 ? ` (${unreadCount} new)` : ''}
+				</button>
+			) : null}
 
 			<form className="chat-form" onSubmit={sendMessage}>
 				<input

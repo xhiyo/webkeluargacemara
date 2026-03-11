@@ -506,24 +506,30 @@ function App() {
 			) : null}
 
 			<section className="grid-area">
-				<Schedule
-					onCountChange={setScheduleCount}
-					onNotice={setDbNotice}
-					currentUserEmail={memberEmail}
-				/>
-				<MemoriesPhotos
-					onCountChange={setMemoryCount}
-					onNotice={setDbNotice}
-					currentUserEmail={memberEmail}
-				/>
+				<div id="schedule-section">
+					<Schedule
+						onCountChange={setScheduleCount}
+						onNotice={setDbNotice}
+						currentUserEmail={memberEmail}
+					/>
+				</div>
+				<div id="memory-section">
+					<MemoriesPhotos
+						onCountChange={setMemoryCount}
+						onNotice={setDbNotice}
+						currentUserEmail={memberEmail}
+					/>
+				</div>
 			</section>
 
-			<GlobalChat
-				onNotice={setDbNotice}
-				currentUserEmail={memberEmail}
-				onOnlineCountChange={setOnlineCount}
-			/>
-			<Footer />
+			<div id="chat-section">
+				<GlobalChat
+					onNotice={setDbNotice}
+					currentUserEmail={memberEmail}
+					onOnlineCountChange={setOnlineCount}
+				/>
+			</div>
+			<Footer scheduleCount={scheduleCount} memoryCount={memoryCount} onlineCount={onlineCount} />
 
 			{activeHeroPhoto ? (
 				<div
