@@ -969,7 +969,7 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 
 			</section>
 		</React.Fragment>
-	)
+	);
 }
 
 export default GlobalChat
