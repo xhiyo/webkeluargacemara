@@ -279,21 +279,6 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 		})
 	}
 
-	const typingLabel = useMemo(() => {
-		if (typingUsers.length === 0) {
-			return ''
-		}
-
-		if (typingUsers.length === 1) {
-			return `${typingUsers[0]} is typing`
-		}
-
-		if (typingUsers.length === 2) {
-			return `${typingUsers[0]} and ${typingUsers[1]} are typing`
-		}
-
-		return `${typingUsers.length} members are typing`
-	}, [typingUsers])
 
 	const normalizedSearchTerm = useMemo(() => searchTerm.trim().toLowerCase(), [searchTerm])
 
