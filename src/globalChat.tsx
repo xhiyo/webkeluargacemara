@@ -968,47 +968,6 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 				) : null}
 
 			</section>
-			<form className="chat-form" onSubmit={sendMessage}>
-				<input
-					type="text"
-					value={draft}
-					onChange={(event) => {
-						const nextValue = event.target.value
-						setDraft(nextValue)
-
-						if (!nextValue.trim()) {
-							sendTypingState(false)
-							if (typingStopTimerRef.current) {
-								clearTimeout(typingStopTimerRef.current)
-								typingStopTimerRef.current = null
-							}
-							return
-						}
-
-						sendTypingState(true)
-						if (typingStopTimerRef.current) {
-							clearTimeout(typingStopTimerRef.current)
-						}
-
-						typingStopTimerRef.current = setTimeout(() => {
-							sendTypingState(false)
-							typingStopTimerRef.current = null
-						}, 1500)
-					}}
-					placeholder="Type a message..."
-					maxLength={600}
-				/>
-				<button type="submit" disabled={isSending}>
-					{isSending ? 'Sending...' : 'Send'}
-				</button> 	
-			</form>
-			{typingUsers.length > 0 ? (
-				<p className="chat-typing" aria-live="polite">
-					{typingLabel}
-					<span className="typing-dots" aria-hidden="true" />
-				</p>
-			) : null}
-			</section>
 		</React.Fragment>
 	)
 }
