@@ -1,3 +1,6 @@
+  .chat-head-row .chat-online-strip {
+    margin: 0.25rem 0 0.25rem !important;
+  }
 .circle-app {
   width: min(1100px, 100% - 2rem);
   margin: 2rem auto 3rem;

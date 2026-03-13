@@ -819,7 +819,7 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 				</button>
 			) : null}
 
-			<div className="chat-online-strip" aria-live="polite" style={{ margin: '0.7rem 0 0.5rem' }}>
+			<div className="chat-online-strip" aria-live="polite" style={{ margin: '0.2rem 0 0.2rem' }}>
 				<span className="chat-online-count">{onlineUsers.length} online now</span>
 				{onlineUsers.length > 0 ? (
 					<div className="chat-online-users">
