@@ -808,6 +808,17 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 					</div>
 				) : null}
 			</div>
+			{/* ...existing code... */}
+			<ul className="chat-list" ref={listRef}>
+				{/* ...existing code... */}
+			</ul>
+
+			{!isAtBottom ? (
+				<button type="button" className="chat-jump-btn" onClick={jumpToLatest}>
+					Jump to latest{unreadCount > 0 ? ` (${unreadCount} new)` : ''}
+				</button>
+			) : null}
+
 			<div className="chat-online-strip" aria-live="polite" style={{ margin: '0.7rem 0 0.5rem' }}>
 				<span className="chat-online-count">{onlineUsers.length} online now</span>
 				{onlineUsers.length > 0 ? (
