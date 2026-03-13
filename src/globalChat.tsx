@@ -774,6 +774,20 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 						</button>
 					) : null}
 				</div>
+				<div className="chat-online-strip" aria-live="polite">
+					<span className="chat-online-count" style={{ display: 'block', marginBottom: '0.15rem', textAlign: 'left' }}>{onlineUsers.length} online now</span>
+					{onlineUsers.length > 0 ? (
+						<div className="chat-online-users" style={{ justifyContent: 'flex-start', alignItems: 'center', display: 'flex', flexWrap: 'wrap' }}>
+							{onlineUsers.map((email) => (
+								<span key={email} className="chat-online-user-pill">
+									{email}
+								</span>
+							))}
+						</div>
+					) : (
+						<span className="chat-online-empty" style={{ display: 'block', textAlign: 'left' }}>No active users yet.</span>
+					)}
+				</div>
 				<div className="chat-tools-row">
 					<label className="chat-search" htmlFor="chat-search-input">
 						<span className="chat-search-label">Search</span>
@@ -807,31 +821,6 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 						<span>Loading chat...</span>
 					</div>
 				) : null}
-			</div>
-			{/* ...existing code... */}
-			<ul className="chat-list" ref={listRef}>
-				{/* ...existing code... */}
-			</ul>
-
-			{!isAtBottom ? (
-				<button type="button" className="chat-jump-btn" onClick={jumpToLatest}>
-					Jump to latest{unreadCount > 0 ? ` (${unreadCount} new)` : ''}
-				</button>
-			) : null}
-
-			<div className="chat-online-strip" aria-live="polite" style={{ margin: '0.2rem 0 0.2rem' }}>
-				<span className="chat-online-count">{onlineUsers.length} online now</span>
-				{onlineUsers.length > 0 ? (
-					<div className="chat-online-users">
-						{onlineUsers.map((email) => (
-							<span key={email} className="chat-online-user-pill">
-								{email}
-							</span>
-						))}
-					</div>
-				) : (
-					<span className="chat-online-empty">No active users yet.</span>
-				)}
 			</div>
 
 			<ul className="chat-list" ref={listRef}>
@@ -960,7 +949,7 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 				/>
 				<button type="submit" disabled={isSending}>
 					{isSending ? 'Sending...' : 'Send'}
-				</button>
+				</button> 	
 			</form>
 			{typingUsers.length > 0 ? (
 				<p className="chat-typing" aria-live="polite">
