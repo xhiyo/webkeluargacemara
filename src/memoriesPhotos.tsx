@@ -773,12 +773,11 @@ function MemoriesPhotos({ onCountChange, currentUserEmail }: MemoriesPhotosProps
 					onClick={() => setActiveMemoryPhoto(null)}
 					role="dialog"
 					aria-modal="true"
-					style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
 				>
 					<div
 						className="hero-lightbox-card memory-lightbox-card memory-modal-card"
 						onClick={(event) => event.stopPropagation()}
-						style={{ maxWidth: 420, width: '100%', background: '#fff', borderRadius: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.18)', padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+						style={{ width: 'min(900px, 90vw)', maxWidth: '100%', background: '#fff', borderRadius: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.18)', padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
 					>
 						<button
 							type="button"
@@ -788,13 +787,14 @@ function MemoriesPhotos({ onCountChange, currentUserEmail }: MemoriesPhotosProps
 						>
 							Close
 						</button>
-						<SmartImage src={activeMemoryPhoto.src} alt={activeMemoryPhoto.caption} />
+						<div style={{ width: '100%' }}>
+							<SmartImage src={activeMemoryPhoto.src} alt={activeMemoryPhoto.caption} />
+						</div>
 						<p style={{ margin: '16px 0 8px', fontWeight: 600, fontSize: '1.1em', textAlign: 'center', color: '#222' }}>
 							{activeMemoryPhoto.caption}
 							{activeMemoryPhoto.date ? ` · ${activeMemoryPhoto.date}` : ''}
 							{` · added by ${activeMemoryPhoto.addedBy}`}
 						</p>
-						 // ...existing code...
 					</div>
 				</div>
 			) : null}
