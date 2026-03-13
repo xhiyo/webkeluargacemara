@@ -774,20 +774,6 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 						</button>
 					) : null}
 				</div>
-				<div className="chat-online-strip" aria-live="polite">
-					<span className="chat-online-count">{onlineUsers.length} online now</span>
-					{onlineUsers.length > 0 ? (
-						<div className="chat-online-users">
-							{onlineUsers.map((email) => (
-								<span key={email} className="chat-online-user-pill">
-									{email}
-								</span>
-							))}
-						</div>
-					) : (
-						<span className="chat-online-empty">No active users yet.</span>
-					)}
-				</div>
 				<div className="chat-tools-row">
 					<label className="chat-search" htmlFor="chat-search-input">
 						<span className="chat-search-label">Search</span>
@@ -821,6 +807,20 @@ function GlobalChat({ currentUserEmail, onNotice, onOnlineCountChange }: GlobalC
 						<span>Loading chat...</span>
 					</div>
 				) : null}
+			</div>
+			<div className="chat-online-strip" aria-live="polite" style={{ margin: '0.7rem 0 0.5rem' }}>
+				<span className="chat-online-count">{onlineUsers.length} online now</span>
+				{onlineUsers.length > 0 ? (
+					<div className="chat-online-users">
+						{onlineUsers.map((email) => (
+							<span key={email} className="chat-online-user-pill">
+								{email}
+							</span>
+						))}
+					</div>
+				) : (
+					<span className="chat-online-empty">No active users yet.</span>
+				)}
 			</div>
 
 			<ul className="chat-list" ref={listRef}>

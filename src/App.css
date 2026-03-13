@@ -2201,6 +2201,8 @@ button:hover {
 
   .chat-form {
     grid-template-columns: 1fr;
+    gap: 0.7rem;
+    padding: 0.5rem 0.1rem;
   }
 
   .memory-comment-form {
@@ -2227,6 +2229,28 @@ button:hover {
 
   .chat-bubble {
     max-width: 100%;
+    padding: 0.7rem 0.5rem;
+    font-size: 1.02em;
+    border-radius: 1.1rem;
+  }
+  .chat-list {
+    max-height: 60vh;
+    min-height: 180px;
+    padding: 0.5rem 0.1rem;
+    gap: 0.7rem;
+  }
+  .chat-item {
+    margin-bottom: 0.2rem;
+  }
+  .chat-form input {
+    font-size: 1.08em;
+    padding: 0.7rem 0.7rem;
+    border-radius: 1rem;
+  }
+  .chat-form button {
+    font-size: 1.08em;
+    padding: 0.7rem 1.1rem;
+    border-radius: 1rem;
   }
 
   .chat-online-users {
