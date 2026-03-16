@@ -15,7 +15,7 @@ type LoginResult = {
 const fallbackAllowedMembers = [
 	'fabian.ardana@gmail.com',
 	'candice@keluargacemara.com',
-	'adinda@keluargacemara.com',
+	'adindazaa@gmail.com',
 	'fasa@keluargacemara.com',
 	'arganta9917@gmail.com',
 	'jonathan@keluargacemara.com',

@@ -229,6 +229,10 @@ function MemoriesPhotos({ onCountChange, currentUserEmail }: MemoriesPhotosProps
 		setTotalMemoryCount(count ?? 0)
 
 		const mapped = ((data ?? []) as MemoryRow[]).map(mapMemoryRowToPhoto)
+		// TEMP DEBUG: Show what is loaded
+		if (!mapped.length) {
+			alert('No memories loaded. Data from Supabase: ' + JSON.stringify(data))
+		}
 		if (reset) {
 			setMemories(mapped)
 		} else {
@@ -378,103 +382,55 @@ function MemoriesPhotos({ onCountChange, currentUserEmail }: MemoriesPhotosProps
 		}
 
 		const nextCaption = editingCaption.trim()
-
 		if (!nextCaption) {
 			return
 		}
 
 		const target = memories.find((photo) => photo.id === id)
-
 		if (!target) {
+			return
+		}
+		if (!target.memoryId) {
 			return
 		}
 
 		setSavingMemoryId(id)
 
 		try {
-			const addedBy = target.addedBy || currentUserEmail?.trim() || 'Guest'
-			const replacementInsert = await supabase
+			const { data, error } = await supabase
 				.from('memory')
-				.insert([
-					{
-						memoryName: nextCaption,
-						memoryPhotosUrl: target.src,
-						memoryAddedBy: addedBy,
-					},
-				])
+				.update({ memoryName: nextCaption })
+				.eq('memoryId', target.memoryId)
 				.select('*')
-				.single()
 
-			const safeReplacementInsert = replacementInsert.error
-				? await supabase
-						.from('memory')
-						.insert([
-							{
-								memoryName: nextCaption,
-								memoryPhotosUrl: target.src,
-							},
-						])
-						.select('*')
-						.single()
-				: replacementInsert
-
-			 if (safeReplacementInsert.error || !safeReplacementInsert.data) {
-				 // Optionally handle error
-				 return
-			 }
-
-			const replacementRaw = safeReplacementInsert.data as MemoryRow
-			const replacementPhoto = mapMemoryRowToPhoto(replacementRaw, 0)
-			const replacementWithOwner = !replacementRaw.memoryAddedBy
-				? { ...replacementPhoto, addedBy }
-				: replacementPhoto
-			const numericId = Number(target.memoryId)
-
-			    const deleteOld = Number.isNaN(numericId)
-				? await supabase
-					.from('memory')
-					.delete()
-					.eq('id', target.id)
-					.select('memoryId')
-				: await supabase
-					.from('memory')
-					.delete()
-					.eq('id', numericId)
-					.select('memoryId')
-
-			if (deleteOld.error || (deleteOld.data ?? []).length === 0) {
-				const fallbackDeleteOld = await supabase
-					.from('memory')
-					.delete()
-					.eq('memoryName', target.caption)
-					.eq('memoryPhotosUrl', target.src)
-					.select('memoryId')
-
-				 if (fallbackDeleteOld.error || (fallbackDeleteOld.data ?? []).length === 0) {
-					 // Optionally handle error
-				 }
+			if (error) {
+				alert('Failed to update memory: ' + (error?.message || 'Unknown error'))
+				setSavingMemoryId(null)
+				return
+			}
+			if (!data || data.length === 0) {
+				alert('No memory row was updated. Please check if this memory still exists.')
+				setSavingMemoryId(null)
+				return
+			}
+			if (data.length > 1) {
+				alert('Warning: Multiple rows updated. There may be a data integrity issue.')
 			}
 
 			setMemories((prev) =>
-				sortMemoriesByNewest([
-					replacementWithOwner,
-					...prev.filter((photo) =>
-						photo.id !== id &&
-						photo.memoryId !== replacementWithOwner.memoryId &&
-						photo.id !== replacementWithOwner.id
-					),
-				]),
+				sortMemoriesByNewest(
+					prev.map((photo) =>
+						photo.id === id ? { ...photo, caption: nextCaption } : photo
+					)
+				)
 			)
 
 			setActiveMemoryPhoto((prev) => {
 				if (!prev || prev.id !== id) {
 					return prev
 				}
-
-				return replacementWithOwner
+				return { ...prev, caption: nextCaption }
 			})
-
-			 // ...existing code...
 
 			cancelEditMemory()
 		} finally {
@@ -488,25 +444,17 @@ function MemoriesPhotos({ onCountChange, currentUserEmail }: MemoriesPhotosProps
 		if (!target) {
 			return
 		}
+		if (!target.memoryId) {
+			return
+		}
 
-		 // ...existing code...
 		let deletedCommitted = false;
-		const numericId = Number(target.memoryId);
-
-		 // ...existing code...
-
-		// Now delete the memory row
-		const primaryDelete = Number.isNaN(numericId)
-			? await supabase
-				.from('memory')
-				.delete()
-				.eq('memoryId', target.memoryId)
-				.select('memoryId')
-			: await supabase
-				.from('memory')
-				.delete()
-				.eq('memoryId', numericId)
-				.select('memoryId');
+		// Always use memoryId for deletion
+		const primaryDelete = await supabase
+			.from('memory')
+			.delete()
+			.eq('memoryId', target.memoryId)
+			.select('memoryId');
 
 		if (primaryDelete.error) {
 			// Optionally handle error
