@@ -625,39 +625,14 @@ function MemoriesPhotos({ onCountChange, currentUserEmail }: MemoriesPhotosProps
 										<div className="memory-actions">
 											<button
 												type="button"
-												style={{
-													background: '#4b6e47',
-													border: 'none',
-													color: '#fff',
-													fontSize: '0.88em',
-													fontWeight: 600,
-													padding: '2px 10px',
-													borderRadius: '10px',
-													cursor: 'pointer',
-													minWidth: '40px',
-													marginRight: '0px',
-													boxShadow: '0 2px 8px rgba(46,125,50,0.13)',
-													letterSpacing: '0.01em',
-												}}
+												className="memory-action-btn"
 												onClick={() => startEditMemory(photo)}
 											>
 												Edit
 											</button>
 											<button
 												type="button"
-												style={{
-													background: '#4b6e47',
-													border: 'none',
-													color: '#fff',
-													fontSize: '0.75em',
-													fontWeight: 600,
-													padding: '2px 8px',
-													borderRadius: '10px',
-													cursor: 'pointer',
-													minWidth: '40px',
-													boxShadow: '0 2px 8px rgba(46,125,50,0.13)',
-													letterSpacing: '0.01em',
-												}}
+												className="memory-action-btn"
 												onClick={() => deleteMemory(photo.id)}
 											>
 												Delete
