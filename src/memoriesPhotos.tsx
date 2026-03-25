@@ -262,7 +262,7 @@ function MemoriesPhotos({ onCountChange, currentUserEmail }: MemoriesPhotosProps
 			.channel('memory-realtime-sync')
 			.on(
 				'postgres_changes',
-				{ event: '*', schema: 'public', table: 'memoryId' },
+				{ event: '*', schema: 'public', table: 'memory' },
 				() => {
 					void refreshMemories()
 				},
