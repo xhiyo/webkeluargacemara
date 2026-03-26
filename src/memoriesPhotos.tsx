@@ -511,7 +511,7 @@ function MemoriesPhotos({ onCountChange, currentUserEmail }: MemoriesPhotosProps
 						Title
 						<input
 							type="text"
-							placeholder="Write ur caption here..."
+							placeholder="Write ur Title here..."
 							value={caption}
 							onChange={(event) => setCaption(event.target.value)}
 						/>

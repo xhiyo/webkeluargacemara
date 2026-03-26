@@ -15,6 +15,7 @@ import fasaPhoto from './components/fasa.jpeg'
 import fabianPhoto from './components/fabian.jpeg'
 import gantaPhoto from './components/ganta.jpeg'
 import jonathanPhoto from './components/jonathan.PNG'
+import ProfileCircleDesc from './profileCircleDesc';
 
 type FriendProfile = {
 	id: number
@@ -23,6 +24,8 @@ type FriendProfile = {
 	favoriteActivity: string
 	avatar: string
 }
+
+type FriendProfileWithDesc = FriendProfile & { description: string; contactNumber: string }
 
 type HeroPhoto = {
 	src: string
@@ -116,6 +119,63 @@ const friendProfiles: FriendProfile[] = [
 		role: 'Admin Loh Ya',
 		favoriteActivity: 'Gitaris NDC Terbaik Di Bumi',
 		avatar: jonathanPhoto,
+	},
+]
+
+const friendProfilesDesc: FriendProfileWithDesc[] = [
+	{
+		id: 1,
+		name: 'Candice Aemelia',
+		role: 'Member',
+		favoriteActivity: 'Cari Matcha',
+		avatar: candicePhoto,
+		description: 'Candice is the matcha hunter and always brings joy to the group and also she was a documentation girl that ensure our journey will be captured every moment. - Fabian.',
+		contactNumber: '6281809702710',
+	},
+	{
+		id: 2,
+		name: 'Adinda',
+		role: 'Member',
+		favoriteActivity: 'Wombat Ngajleng',
+		avatar: adindaPhoto,
+		description: 'Dinda is very supportive friends for us she always fun and share her laugh to us. She is very kind and make us happy everyday, meet Dinda was a great journey for usss. - Fabian  ',
+		contactNumber: '6287708770106',
+	},
+	{
+		id: 3,
+		name: 'Fasa',
+		role: 'Member',
+		favoriteActivity: 'Ibu Negara',
+		avatar: fasaPhoto,
+		description: 'Fasa is a memorable friends and the extrovert one, she has a good positive aura for our circle and also without her we dont even know that we will together untill now. - Fabian',
+		contactNumber: '6285764827828',
+	},
+	{
+		id: 4,
+		name: 'Fabian',
+		role: 'Member',
+		favoriteActivity: 'Pemimpin Gereja Katolik Roma',
+		avatar: fabianPhoto,
+		description: 'Fabian ~ ',
+		contactNumber: '6287774185495',
+	},
+	{
+		id: 5,
+		name: 'Ganta',
+		role: 'Aktivis',
+		favoriteActivity: 'Tukang Kebun, Supir TJ, Tukang Gali Kubur, Tukang Ngarit, Petani, Satpam, Tukang Fogging',
+		avatar: gantaPhoto,
+		description: 'Tukang WC Amanah Hubungi Nomor Disampinggg, Sedang Promo Diskon 50 % per Satu Kali Sedot WC. (Tunggu apalagi buruannnn sebelum kehabisann!!!)',
+		contactNumber: '6285156853252',
+	},
+	{
+		id: 6,
+		name: 'Jonathan',
+		role: 'Admin Loh Ya',
+		favoriteActivity: 'Gitaris NDC Terbaik Di Bumi',
+		avatar: jonathanPhoto,
+		description: 'Jonathan is a very very fun person for us, he oftenly share his story a lot and we enjoy to hear his storry. And dont forget to bring him a glass of coffe for sharing a lot yy. - Fabian',
+		contactNumber: '6287867532688',
 	},
 ]
 
@@ -504,6 +564,8 @@ function App() {
 				</div>
 			</section>
 			) : null}
+
+			{memberEmail ? <ProfileCircleDesc profiles={friendProfilesDesc} /> : null}
 
 			<section className="grid-area">
 				<div id="schedule-section">
