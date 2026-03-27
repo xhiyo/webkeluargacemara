@@ -1,3 +1,18 @@
+/* ProfileCircleDesc mobile title and contact link fixes */
+@media (max-width: 700px) {
+  .profile-circle-desc-panel > div[style*="position: absolute"] {
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    text-align: center !important;
+    width: max-content;
+    min-width: 160px;
+    max-width: 90vw;
+    margin: 0 auto;
+  }
+}
+.profile-circle-desc-contact .memory-action-btn {
+  text-decoration: none !important;
+}
 /* Responsive ProfileCircleDesc styles */
 .profile-circle-desc-list {
   display: flex;
