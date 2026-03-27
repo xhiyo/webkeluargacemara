@@ -12,6 +12,15 @@
 }
 .profile-circle-desc-contact .memory-action-btn {
   text-decoration: none !important;
+  min-width: 140px;
+  height: 54px;
+  font-size: 1.08rem;
+  font-weight: 800;
+  padding: 0.5rem 1.2rem;
+  border-radius: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 /* Responsive ProfileCircleDesc styles */
 .profile-circle-desc-list {
