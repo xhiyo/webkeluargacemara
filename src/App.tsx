@@ -165,7 +165,7 @@ const friendProfilesDesc: FriendProfileWithDesc[] = [
 		role: 'Aktivis',
 		favoriteActivity: 'Tukang Kebun, Supir TJ, Tukang Gali Kubur, Tukang Ngarit, Petani, Satpam, Tukang Fogging',
 		avatar: gantaPhoto,
-		description: 'Tukang WC Amanah Hubungi Nomor Disampinggg, Sedang Promo Diskon 50 % per Satu Kali Sedot WC. (Tunggu apalagi buruannnn sebelum kehabisann!!!)',
+		description: 'Tukang WC Amanah Hubungi Nomor Disampinggg, Sedang Promo Diskon 60 % per Satu Kali Sedot WC. (Tunggu apalagi buruannnn sebelum kehabisann!!!)',
 		contactNumber: '6285156853252',
 	},
 	{
