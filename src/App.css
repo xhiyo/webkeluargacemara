@@ -96,27 +96,34 @@
     flex-direction: column !important;
     align-items: stretch;
     min-height: unset;
-    padding: 1rem 0.7rem;
-    gap: 18px;
+    padding: 0.5rem 0.3rem;
+    gap: 10px;
+    width: 100vw;
+    box-sizing: border-box;
+    margin-left: -8px;
+    margin-right: -8px;
   }
   .profile-circle-desc-avatar {
-    width: 90px;
-    height: 90px;
+    width: 70px;
+    height: 70px;
     border-radius: 32px 0 0 0 !important;
-    margin: 0 auto;
+    margin: 0 auto 6px auto;
   }
   .profile-circle-desc-content h3 {
-    font-size: 1.05rem;
+    font-size: 1rem;
   }
   .profile-circle-desc-content .activity {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
   }
   .profile-circle-desc-content .desc {
-    font-size: 0.92rem;
+    font-size: 0.88rem;
+    word-break: break-word;
   }
   .profile-circle-desc-contact {
     justify-content: center;
-    margin-top: 8px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 }
 /* Memory action button style for Edit/Delete */
