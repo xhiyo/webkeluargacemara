@@ -55,6 +55,7 @@
   background: #fff;
   flex-shrink: 0;
   transition: border-radius 0.3s;
+  border-radius: 32px 0 0 0 !important;
 }
 .profile-circle-desc-content {
   flex: 1;
@@ -101,7 +102,7 @@
   .profile-circle-desc-avatar {
     width: 90px;
     height: 90px;
-    border-radius: 50% !important;
+    border-radius: 32px 0 0 0 !important;
     margin: 0 auto;
   }
   .profile-circle-desc-content h3 {
